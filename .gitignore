@@ -1,2 +1,8 @@
 __pycache__/*
 .ipynb_checkpoints/*
+models/生成器/image/*
+models/预训练/image/*
+models/转换器/image/*
+models/生成器/*
+models/预训练/*
+models/转换器/*
