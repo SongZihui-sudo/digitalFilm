@@ -1,6 +1,6 @@
-# DigitalFilm 数字胶卷 - kodark gold 200
+# DigitalFilm - Kodak Gold 200
 
-DigitalFilm：使用一个神经网络来模拟胶卷风格。
+DigitalFilm： Use a neural network to simulate film style.
 
 ---
 
@@ -12,68 +12,67 @@ DigitalFilm：使用一个神经网络来模拟胶卷风格。
     <img src="images/logo.svg" alt="Logo" width="320" height="160">
   </a>
 
-  <h3 align="center">"DigitalFilm 数字胶卷</h3>
+  <h3 align="center">"DigitalFilm</h3>
   <p align="center">
-    使用一个神经网络来模拟胶卷风格。
+    Use a neural network to simulate film style.
     <br />
-    <a href="https://github.com/shaojintian/Best_README_template"><strong>探索本项目的文档 »</strong></a>
+    <a href="https://github.com/shaojintian/Best_README_template"><strong>Explore the documentation for this project »</strong></a>
     <br />
     <br />
-    <a href="./app/digitalFilm.py">查看Demo</a>
+    <a href="./app/digitalFilm.py">View Demo</a>
     ·
-    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">报告Bug</a>
+    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">Report bugs</a>
     ·
-    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">提出新特性</a>
+    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">Propose new features</a>
   </p>
 
 </p>
 
+This README.md is aimed at developers and users  
+[简体中文](./readme.md)
 
- 本篇README.md面向开发者和用户  
- [English](./english.md)
+catalogue
 
-## 目录
+-Digital Film - Kodak Gold 200
+-[Catalog] (# Catalog)
+-[Run Demo] (# Run Demo)
+-[* * Installation Steps * *] (# Installation Steps)
+-[Overall Architecture] (# Overall Architecture)
+-[Dataset] (# Dataset)
+-[Comparison of Generated Images] (# Comparison of Generated Images)
+-[Color Space for Generating Images] (# Color Space for Generating Images)
+-[File Directory Description] (# File Directory Description)
+-[Version Control] (# Version Control)
+-[Author] (# Author)
+-[Copyright Notice] (# Copyright Notice)
 
-- [DigitalFilm 数字胶卷 - kodark gold 200](#digitalfilm-数字胶卷---kodark-gold-200)
-  - [目录](#目录)
-    - [运行 Demo](#运行-demo)
-          - [**安装步骤**](#安装步骤)
-    - [整体架构](#整体架构)
-    - [数据集](#数据集)
-    - [生成的图片对比](#生成的图片对比)
-    - [生成图片的色彩空间](#生成图片的色彩空间)
-    - [文件目录说明](#文件目录说明)
-    - [版本控制](#版本控制)
-    - [作者](#作者)
-    - [版权说明](#版权说明)
-
-### 运行 Demo
+### Run Demo
 
 ```bash
 python digitalFilm.py [-v/-h/-g] -i <input> -o <ouput> -m <model>
 ```
-- -v 打印版本信息
-- -h 帮助信息
-- -g 图形化选择图片
-- -i 输入图片的目录
-- -o 输出图片的目录
-- -m 模型目录
+-- v Print version information
+-- h Help Information
+-- g Graphically select images
+-- i Input the directory of the image
+-- o Directory for outputting images
+-- m model directory
 
-###### **安装步骤**
+###### **Installation steps**
 
 ```sh
-git clone https://github.com/SongZihui-sudo/digitalFilm.git
+git clone  https://github.com/SongZihui-sudo/digitalFilm.git
 ```
 
-最好现在conda里创建好环境，然后安装各种依赖。
+It's best to create an environment in conda now and install various dependencies.
 
 ```sh
 pip install -r requirement.txt
 ```
 
-### 整体架构
+### Overall architecture
 
-整体的架构，首先通过人工标注的数码-模拟胶片图像对来训练数据生成器，然后在使用生成器生成数码标签。最后通过数码-模拟胶片图像进行与训练，然后在使用生成数码-真实胶片照片数据集进行微调模型。
+The overall architecture first trains the data generator through manually annotated digital analog film image pairs, and then generates digital labels using the generator. Finally, the model was trained using digital simulated film images, and then fine tuned using the generated digital real film photo dataset.
 
 ```txt
 ----------------------------------------------------------------
@@ -175,55 +174,55 @@ Estimated Total Size (MB): 145.94
 ----------------------------------------------------------------
 ```
 
-### 数据集
+### Dataset
 
-在制作数据集这一阶段。首先基于数据增强技术，利用 Fimo 应用的数字滤镜生成仿真胶片效果图像，构建初步训练集进行模型预训练，同步开发数码照片标签生成模型。在第二阶段，针对真实场景优化模型性能，通过采集网络公开的柯达金200胶片样本构建数据集，运用前期训练的标签生成模型自动创建对应数码标签。最终采用两阶段训练框架：先基于仿真数据进行模型初始化，再通过真实样本数据集进行微调优化，这种渐进式训练方法有效提升了模型对真实影像特征的捕捉能力，同时缓解了原始数据不足带来的过拟合风险。
+At the stage of creating the dataset. Firstly, based on data augmentation technology, simulation film effect images are generated using digital filters applied by Fimo. A preliminary training set is constructed for model pre training, and a digital photo label generation model is synchronously developed. In the second stage, the performance of the model is optimized for real-world scenarios. A dataset is constructed by collecting publicly available Kodajin 200 film samples from the network, and the pre trained label generation model is used to automatically create corresponding digital labels. Ultimately, a two-stage training framework was adopted: first, the model was initialized based on simulation data, and then fine tuned and optimized using a real sample dataset. This progressive training method effectively improved the model's ability to capture real image features while mitigating the risk of overfitting caused by insufficient raw data.
 
-数据集由双源影像数据构成，主体部分采集自小米13 Ultra 手机拍摄的高质量数码照片，其余选自专业HDR影像数据集[1]。数据标注体系包含两个平行维度：(1)人工标注组：1517对精准配准的数码-模拟胶片图像对，其中胶片效果通过Fimo专业滤镜实现；(2)自动生成组：363张柯达金200专业胶片样片及其对应数码标签，通过预训练模型自动生成。在数据预处理阶段，采用动态数据增广策略，对输入图像实时施加随机空间变换，有效提升模型几何不变性。数据集按分层抽样原则进行划分，80%（1517×0.8+363×0.8=1504张）作为训练集，20%（376张）作为测试集，确保数码/胶片样本在训练测试集中的分布一致性。
+The dataset consists of dual source image data, with the main body collected from high-quality digital photos taken by Xiaomi 13 Ultra smartphones, and the rest selected from professional HDR image datasets [1]. The data annotation system consists of two parallel dimensions: (1) manual annotation group: 1517 pairs of accurately registered digital analog film image pairs, where the film effect is achieved through Fimo professional filters; (2) Automatic generation group: 363 Kodak Gold 200 professional film samples and their corresponding digital labels are automatically generated through a pre trained model. In the data preprocessing stage, a dynamic data augmentation strategy is adopted to apply real-time random spatial transformations to the input image, effectively improving the geometric invariance of the model. The dataset is divided according to the principle of stratified sampling, with 80% (1517 × 0.8+363 × 0.8=1504 images) as the training set and 20% (376 images) as the testing set, ensuring the consistency of the distribution of digital/film samples in the training and testing set.
 
-### 生成的图片对比
+### Comparison of generated images
 
-![图a](./images/image_1.png)  
+![alt text](./images/image_1.png)
 
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图1 对比</center> 
+<center style="font size: 14px; color: # C0C0C0; text decoration: underline">Figure 1 comparison</center>
 
 
 ![alt text](./images/image_2.png) 
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图2 对比</center> 
+<center style="font size: 14px; color: # C0C0C0; text decoration: underline">Figure 2 comparison</center>
 
 ![alt text](./images/image_3.png)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图3 对比</center> 
+<center style="font size: 14px; color: # C0C0C0; text decoration: underline">Figure 3 comparison</center>
 
 
-### 生成图片的色彩空间
+###Generate color space for images
 
 ![alt text](./images/image_5.png)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图4 上图1的 R G B 通道</center> 
+<center style="font size: 14px; color: # C0C0C0; text decoration: underline">Figure 4 The RGB channel in Figure 1</center>
 
 
 ![alt text](./images/image_4.png)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图4 上图1的色彩空间</center> 
+<center style="font size: 14px; color: # C0C0C0; text decoration: underline">Figure 4 The color space in Figure 1</center>
 
-### 文件目录说明
+### File directory description
 
-- DigitalFilm.ipynb 用来训练模型
-- app   一个 Demo
-  - digitalFilm.py 
-  - mynet.py
-  - kodark_gold_200.pt
+-DigitalFilm.ipynb is used to train models
+-An app demo
+- digitalFilm.py 
+- mynet.py
+- kodark_gold_200.pt
 
-### 版本控制
+### Version control
 
-该项目使用Git进行版本管理。您可以在repository参看当前可用版本。
+This project uses Git for version management. You can refer to the currently available versions in the repository.
 
-### 作者
+### Author
 
-151122876@qq.com SongZihui-sudo
+151122876@qq.com  SongZihui-sudo
 
-知乎:Dr.who  &ensp; qq:1751122876    
+Zhihu: Dr.who  &ensp;  qq:1751122876    
 
- *您也可以在贡献者名单中参看所有参与该项目的开发者。*
+*You can also see all the developers involved in the project in the list of contributors*
 
-### 版权说明
+### Copyright Notice
 
-该项目签署了 GPLv3 授权许可，详情请参阅 [LICENSE.txt](./LICENSE.txt)
+This project has signed a GPLv3 license, please refer to [LICENSE. txt] (./LICENSE. txt) for details
