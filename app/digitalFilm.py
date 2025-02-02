@@ -70,7 +70,7 @@ def main(argv):
         elif opt in ("-m", "-model"):
             model_path = arg
 
-    if inputfile != '' and output_image != '':
+    if inputfile != '' and outputfile != '':
         image = load_image(inputfile)
         model = load_model(model_path)
         output_image = process_images(model, image)
