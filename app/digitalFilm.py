@@ -3,19 +3,21 @@ import torchvision.transforms as transforms
 from PIL import Image
 import sys
 import getopt
+import tkinter as tk
+from tkinter import filedialog
 
 import mynet
 
 transform = transform = transforms.Compose([
-  # transforms.Resize((200, 320)),
   transforms.ToTensor()
 ])
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def load_model(model_path):
     model = mynet.FilmStyleTransfer()
-    checkpoint = torch.load(model_path)
+    checkpoint = torch.load(model_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     print("[INFO] Open model successfully!")
     return model
@@ -42,17 +44,18 @@ def save_image(image, save_path):
 def process_images(model, image):
     model.eval()
     with torch.no_grad():
-        image = image.unsqueeze(0).cuda()
+        image = image.unsqueeze(0)
+        image = image.to(device)
         output= model(image)
         output = postprocess_image(output)
         return output
            
 def main(argv):
-    model_path = "./final_gold_200_training_600.pt"
+    model_path = "./kodark_gold_200.pt"
     inputfile = ''
     outputfile = ''
     try:
-        opts, args = getopt.getopt(argv,"vhi:o:m:",["ifile=","ofile="])
+        opts, args = getopt.getopt(argv,"gvhi:o:m:",["ifile=","ofile="])
     except getopt.GetoptError:
         print("digitalFilm.py -i <inputfile> -o <outputfile>")
         sys.exit(2)
@@ -60,6 +63,11 @@ def main(argv):
         if opt == '-h':
             print("digitalFilm.py -i <inputfile> -o <outputfile>")
             sys.exit()
+        elif opt == '-g':
+            root = tk.Tk()
+            root.withdraw()
+            inputfile = filedialog.askopenfilename()
+            outputfile = filedialog.asksaveasfilename()
         elif opt == '-v':
             print("digitalFilm v0.0.1 SongZihui-sudo 1751122876@qq.com")
             sys.exit()
