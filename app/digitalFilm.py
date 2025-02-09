@@ -24,7 +24,11 @@ def load_model(model_path):
     return model
 
 def load_image(image_path):
-    image = Image.open(image_path).convert("RGB")
+    if image_path[-4:] == ".dng":
+        pass
+    else:
+        print(1)
+        image = Image.open(image_path).convert("RGB")
     if transform:
         image = transform(image)
     print("[INFO] Open image successfully!")
