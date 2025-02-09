@@ -6,6 +6,7 @@ import getopt
 import tkinter as tk
 from tkinter import filedialog
 import numpy as np
+import rawpy
 
 import mynet
 
@@ -25,9 +26,9 @@ def load_model(model_path):
 
 def load_image(image_path):
     if image_path[-4:] == ".dng":
-        pass
+        with rawpy.imread(image_path) as raw:
+            image = raw.postprocess()
     else:
-        print(1)
         image = Image.open(image_path).convert("RGB")
     if transform:
         image = transform(image)
