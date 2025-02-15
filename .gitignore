@@ -10,3 +10,4 @@ app/__pycache__/*
 new_models/*
 resnet18-5c106cde.pth
 resnet50-19c8e357.pth
+output/*
