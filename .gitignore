@@ -8,3 +8,5 @@ models/预训练/*
 models/转换器/*
 app/__pycache__/*
 new_models/*
+resnet18-5c106cde.pth
+resnet50-19c8e357.pth

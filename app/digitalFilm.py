@@ -7,8 +7,11 @@ import tkinter as tk
 from tkinter import filedialog
 import numpy as np
 import rawpy
+from torchvision.utils import save_image
+import torchvision
 
 import mynet
+import mynet2
 
 transform = transform = transforms.Compose([
   transforms.ToTensor()
@@ -17,14 +20,19 @@ transform = transform = transforms.Compose([
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_model(model_path):
-    model = mynet.FilmStyleTransfer()
-    checkpoint = torch.load(model_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    if model_path[-4:] == ".pth":
+        model = mynet2.ResNetGenerator(3,3)
+        model.load_state_dict(torch.load(model_path, map_location=device))
+    else:
+        model = mynet.FilmStyleTransfer()
+        checkpoint = torch.load(model_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     print("[INFO] Open model successfully!")
     return model
 
 def load_image(image_path):
+    print(image_path[-4:])
     if image_path[-4:] == ".dng":
         with rawpy.imread(image_path) as raw:
             image = raw.postprocess()
@@ -32,27 +40,10 @@ def load_image(image_path):
         image = Image.open(image_path).convert("RGB")
     if transform:
         image = transform(image)
+
     print("[INFO] Open image successfully!")
+    
     return image
-
-def postprocess_image(tensor):
-    """将模型输出的张量转换为 PIL 图像"""
-    tensor = tensor.squeeze(0)  # 去掉 batch 维度
-    tensor = tensor.clamp(0, 1)  # 确保值在 [0, 1] 范围内
-    transform = transforms.ToPILImage()  # 转换为 PIL 图像
-    image = transform(tensor)
-    return image
-
-def save_image(image, save_path):
-    """
-    保存图片时自动调整白平衡
-    :param image: PIL Image对象
-    :param save_path: 保存路径
-    """
-    # 保存图片
-    image.save(save_path)
-    print(f"[INFO] Image saved successfully to {save_path}")
-
 
 def process_images(model, image):
     model.eval()
@@ -60,7 +51,6 @@ def process_images(model, image):
         image = image.unsqueeze(0)
         image = image.to(device)
         output= model(image)
-        output = postprocess_image(output)
         return output
            
 def main(argv):
@@ -96,6 +86,7 @@ def main(argv):
         model = load_model(model_path)
         output_image = process_images(model, image)
         save_image(output_image, outputfile)
+        print(f"[INFO] Image saved successfully to {outputfile}")
     else:
         print("digitalFilm.py -i <inputfile> -o <outputfile>")
         print("input path and output path.")
