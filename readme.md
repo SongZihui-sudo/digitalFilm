@@ -30,9 +30,12 @@ Use a neural network to simulate film style.
 This README.md is for developers and users
 [简体中文](./chinese.md)
 
+[PowerPoint Presentation
+](https://incandescent-salmiakki-063eb6.netlify.app/)
+
 ## Table of Contents
 
-- [DigitalFilm Digital Film](#digitalfilm-digital-film)
+- [DeepDigitalFilm](#deepdigitalfilm)
   - [Table of Contents](#table-of-contents)
     - [Sample](#sample)
     - [Run Demo](#run-demo)

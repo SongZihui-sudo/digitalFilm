@@ -29,7 +29,10 @@ DigitalFilm：使用神经网络来模拟胶卷风格。
 
 
  本篇README.md面向开发者和用户  
- [English](./english.md)
+ [English](./readme.md)
+
+[PPT 演示
+](https://incandescent-salmiakki-063eb6.netlify.app/)
 
 ## 目录
 
