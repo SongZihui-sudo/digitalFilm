@@ -1,6 +1,6 @@
-# DigitalFilm 数字胶卷
+# DeepDigitalFilm
 
-DigitalFilm：使用神经网络来模拟胶卷风格。
+DigitalFilm: Use a neural network to simulate film style.
 
 ---
 
@@ -8,120 +8,118 @@ DigitalFilm：使用神经网络来模拟胶卷风格。
 <br />
 
 <p align="center">
-  <a href="./readme.md">
-  </a>
+<a href="./readme.md">
+</a>
 
-  <h3 align="center">"DigitalFilm" 数字胶卷</h3>
-  <p align="center">
-    使用一个神经网络来模拟胶卷风格。
-    <br />
-    <a href="https://github.com/shaojintian/Best_README_template"><strong>探索本项目的文档 »</strong></a>
-    <br />
-    <br />
-    <a href="./app/digitalFilm.py">查看Demo</a>
-    ·
-    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">报告Bug</a>
-    ·
-    <a href="https://github.com/SongZihui-sudo/digitalFilm/issues">提出新特性</a>
-  </p>
+<h3 align="center">"DigitalFilm" Digital Film</h3>
+<p align="center">
+Use a neural network to simulate film style.
+<br />
+<a href="https://github.com/shaojintian/Best_README_template"><strong>Explore the documentation of this project »</strong></a>
+<br />
+<br />
+<a href="./app/digitalFilm.py">View the demo</a>
+·
+<a href="https://github.com/SongZihui-sudo/digitalFilm/issues">Report a bug</a>
+·
+<a href="https://github.com/SongZihui-sudo/digitalFilm/issues">Propose a new feature</a>
+</p>
 
 </p>
 
+This README.md is for developers and users
+[简体中文](./chinese.md)
 
- 本篇README.md面向开发者和用户  
- [English](./english.md)
+## Table of Contents
 
-## 目录
+- [DigitalFilm Digital Film](#digitalfilm-digital-film)
+  - [Table of Contents](#table-of-contents)
+    - [Sample](#sample)
+    - [Run Demo](#run-demo)
+    - [training model](#training-model)
+          - [**Installation steps**](#installation-steps)
+    - [Overall architecture](#overall-architecture)
+    - [Dataset](#dataset)
+    - [File directory description](#file-directory-description)
+    - [Version Control](#version-control)
+    - [Author](#author)
+    - [Copyright](#copyright)
 
-- [DigitalFilm 数字胶卷](#digitalfilm-数字胶卷)
-  - [目录](#目录)
-    - [样片](#样片)
-    - [运行 Demo](#运行-demo)
-    - [训练模型](#训练模型)
-          - [**安装步骤**](#安装步骤)
-    - [整体架构](#整体架构)
-    - [数据集](#数据集)
-    - [文件目录说明](#文件目录说明)
-    - [版本控制](#版本控制)
-    - [作者](#作者)
-    - [版权说明](#版权说明)
-
-### 样片
+### Sample
 
 ![rollei_infrared_400](./example/rollei_infrared_400.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图1 样片rollei_infrared_400</center> 
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 1 Sample rollei_infrared_400</center> 
 
 ![kodak_gold_200](./example/kodak_gold_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图2 样片 kodak gold 200</center> 
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 2 Sample kodak gold 200</center>
 
 ![fuji_color_200](./example/fuji_color_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图3 样片 fuji color 200</center> 
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 3 Sample fuji color 200</center>
 
+### Run Demo
 
-### 运行 Demo
-
-> 输入照片长和宽需要可以被 **32** 整除。
+> The length and width of the input photo need to be divisible by **32**.
 
 ```bash
 python digitalFilm.py [-v/-h/-g] -i <input> -o <ouput> -m <model>
 ```
-- -v 打印版本信息
-- -h 帮助信息
-- -g 图形化选择图片
-- -i 输入图片的目录
-- -o 输出图片的目录
-- -m 模型目录
+- -v print version information
+- -h help information
+- -g graphical image selection
+- -i input image directory
+- -o output image directory
+- -m model directory
 
-### 训练模型
+### training model
 
-训练模型直接使用 cyclegan.ipynb.  
-但是要预先下载 resnet18 的预训练模型。  
-在两个文件夹内准备好数码照片与胶片照片。  
-模型可以在发行版中查看。
+training model directly use cyclegan.ipynb.
+But you need to download the pre-trained model of resnet18 in advance.
+Prepare digital photos and film photos in two folders.
+The model are included in the Release.
 
-###### **安装步骤**
+###### **Installation steps**
 
 ```sh
 git clone https://github.com/SongZihui-sudo/digitalFilm.git
 ```
 
-最好现在conda里创建好环境，然后安装各种依赖。
+It is best to create an environment in conda now and then install various dependencies.
 
 ```sh
 pip install -r requirement.txt
 ```
 
-### 整体架构
+### Overall architecture
 
-将数码照片转换为胶片风格可以看作是一个图像风格转换任务。所以整体的架构采用了 cycleGAN 网络。
-[pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)  
-而且获取大规模数码照片与胶片风格照片的数据比较困难，所以采用无监督的方式，使用未配对的数据进行训练。
+Converting digital photos to film style can be regarded as an image style conversion task. Therefore, the overall architecture adopts the cycleGAN network.
+[pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)
+In addition, it is difficult to obtain large-scale digital photos and film-style photos, so an unsupervised approach is adopted to use unpaired data for training.
 
-### 数据集
+### Dataset
 
-数据集由双源影像数据构成，主体部分采集自小米13 Ultra 手机拍摄的高质量数码照片，其余选自专业HDR影像数据集。  
-胶片样片搜集于网络。
+The dataset consists of dual-source image data, the main part of which is collected from high-quality digital photos taken by Xiaomi 13 Ultra mobile phone, and the rest is selected from professional HDR image dataset.
+Film samples are collected from the Internet.
 
-### 文件目录说明
+### File directory description
 
-- DigitalFilm.ipynb 用来训练模型
-- app   一个 Demo
-  - digitalFilm.py 
-  - mynet.py
-  - mynet2.py
+- DigitalFilm.ipynb is used to train the model
+- app is a demo
+- digitalFilm.py
+- mynet.py
+- mynet2.py
 
-### 版本控制
+### Version Control
 
-该项目使用Git进行版本管理。您可以在repository参看当前可用版本。
+This project uses Git for version management. You can view the currently available version in the repository.
 
-### 作者
+### Author
 
 151122876@qq.com SongZihui-sudo
 
-知乎:Dr.who  &ensp; qq:1751122876    
+Zhihu:Dr.who &ensp; qq:1751122876
 
- *您也可以在贡献者名单中参看所有参与该项目的开发者。*
+*You can also view all the developers involved in the project in the list of contributors. *
 
-### 版权说明
+### Copyright
 
-该项目签署了 GPLv3 授权许可，详情请参阅 [LICENSE.txt](./LICENSE.txt)
+This project is licensed under GPLv3. For details, please refer to [LICENSE.txt](./LICENSE.txt)
