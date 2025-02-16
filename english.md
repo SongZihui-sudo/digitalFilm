@@ -47,11 +47,14 @@ This README.md is for developers and users
 
 ### Sample
 
+![rollei_infrared_400](./example/rollei_infrared_400.jpg)
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 1 Sample rollei_infrared_400</center> 
+
 ![kodak_gold_200](./example/kodak_gold_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 1 Sample kodak gold 200</center>
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 2 Sample kodak gold 200</center>
 
 ![fuji_color_200](./example/fuji_color_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 2 Sample fuji color 200</center>
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">Figure 3 Sample fuji color 200</center>
 
 ### Run Demo
 

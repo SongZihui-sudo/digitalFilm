@@ -48,11 +48,14 @@ DigitalFilm：使用神经网络来模拟胶卷风格。
 
 ### 样片
 
+![rollei_infrared_400](./example/rollei_infrared_400.jpg)
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图1 样片rollei_infrared_400</center> 
+
 ![kodak_gold_200](./example/kodak_gold_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图1 样片 kodak gold 200</center> 
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图2 样片 kodak gold 200</center> 
 
 ![fuji_color_200](./example/fuji_color_200.jpg)
-<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图2 样片 fuji color 200</center> 
+<center style="font-size:14px;color:#C0C0C0;text-decoration:underline">图3 样片 fuji color 200</center> 
 
 
 ### 运行 Demo
