@@ -75,7 +75,7 @@ python digitalFilm.py [-v/-h/-g] -i <input> -o <ouput> -m <model>
 training model directly use cyclegan.ipynb.
 But you need to download the pre-trained model of resnet18 in advance.
 Prepare digital photos and film photos in two folders.
-The Kodak Gold 200 model and Fuji c200 model are included in the `app` file.
+The model are included in the Release.
 
 ###### **Installation steps**
 
@@ -107,8 +107,6 @@ Film samples are collected from the Internet.
 - digitalFilm.py
 - mynet.py
 - mynet2.py
-- kodark_gold_200.pth
-- fuji_color_200.pth
 
 ### Version Control
 

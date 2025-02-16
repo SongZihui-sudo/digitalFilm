@@ -77,7 +77,7 @@ python digitalFilm.py [-v/-h/-g] -i <input> -o <ouput> -m <model>
 训练模型直接使用 cyclegan.ipynb.  
 但是要预先下载 resnet18 的预训练模型。  
 在两个文件夹内准备好数码照片与胶片照片。  
-在 `app` 文件内附带了柯达金200模型与富士c200模型。
+模型可以在发行版中查看。
 
 ###### **安装步骤**
 
@@ -109,8 +109,6 @@ pip install -r requirement.txt
   - digitalFilm.py 
   - mynet.py
   - mynet2.py
-  - kodark_gold_200.pth
-  - fuji_color_200.pth
 
 ### 版本控制
 
