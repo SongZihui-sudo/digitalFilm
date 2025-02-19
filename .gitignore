@@ -14,3 +14,8 @@ output/*
 app/models/*
 digitalFilm.onnx
 print_model.ipynb
+app/build/*
+app/dist/*
+app/digitalFilm.spec
+vgg16-397923af.pth
+doc/*

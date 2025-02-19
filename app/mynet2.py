@@ -2,16 +2,13 @@ import torch
 from torch import nn
 from torchvision import models
     
-# ============================
-# 1. 定义生成器 (ResNet Generator)
-# ============================
 class ResNetGenerator(nn.Module):
-    def __init__(self, input_nc=3, output_nc=3, num_residual_blocks=9):
+    def __init__(self, input_nc=3, output_nc=3, pretrained=True):
         super(ResNetGenerator, self).__init__()
-        
-        # 使用预训练的 ResNet-18
+
+        # 加载预训练的 ResNet-18
         resnet = models.resnet18()
-        resnet.load_state_dict(torch.load("./resnet18-5c106cde.pth", weights_only=False))
+        resnet.load_state_dict("./resnet18-5c106cde.pth")
         
         # 编码器：获取 ResNet 的各层输出，构造 U-Net 风格的跳跃连接
         self.input_conv = nn.Sequential(
@@ -34,6 +31,13 @@ class ResNetGenerator(nn.Module):
 
         self.final_conv = nn.Conv2d(64, output_nc, kernel_size=1)
 
+        # 添加感知损失模块 (VGG16 特征提取)
+        self.vgg = models.vgg16()
+        self.vgg.load_state_dict("./vgg16-397923af.pth")
+        self.vgg  = self.vgg.features[:16].eval()
+        for param in self.vgg.parameters():
+            param.requires_grad = False  # 冻结VGG权重
+
     def _up_block(self, in_channels, out_channels):
         """
         上采样块：先上采样（双线性），再卷积+ReLU
@@ -44,6 +48,32 @@ class ResNetGenerator(nn.Module):
             nn.ReLU(inplace=True)
         )
         return block
+
+    def add_film_grain(self, x, noise_strength=0.1):
+        """
+        给图像Tensor添加高斯噪声，模拟胶片颗粒效果。
+        
+        :param x: 输入图像Tensor
+        :param noise_strength: 噪声强度 (0 - 1)，控制颗粒大小
+        :return: 添加了噪声的图像Tensor
+        """
+        batch_size, channels, height, width = x.shape
+        mean = 0
+        sigma = noise_strength * 255  # 控制噪声的标准差
+        
+        # 生成噪声并将其与图像叠加
+        noise = torch.normal(mean, sigma, size=(batch_size, channels, height, width), dtype=torch.float32, device=x.device)
+        noisy_image = x + noise  # 添加噪声
+        noisy_image = torch.clamp(noisy_image, 0, 1)  # 确保图像的值在 [0, 1] 范围内
+        return noisy_image
+
+    def perceptual_loss(self, real, fake):
+        """
+        计算感知损失，基于 VGG 特征提取。
+        """
+        real_features = self.vgg(real)
+        fake_features = self.vgg(fake)
+        return torch.nn.functional.mse_loss(real_features, fake_features)
 
     def forward(self, x):
         h = x.shape[2]
@@ -59,19 +89,15 @@ class ResNetGenerator(nn.Module):
 
         # 解码器部分：逐步上采样并与编码器对应层特征拼接
         d1 = self.up1(x4)             # d1: [B, 256, H/16, W/16]
-        # 拼接 x3 (256通道)
         d1 = torch.cat([d1, x3], dim=1)  # [B, 256+256=512, H/16, W/16]
 
         d2 = self.up2(d1)             # d2: [B, 128, H/8, W/8]
-        # 拼接 x2 (128通道)
         d2 = torch.cat([d2, x2], dim=1)  # [B, 128+128=256, H/8, W/8]
 
         d3 = self.up3(d2)             # d3: [B, 64, H/4, W/4]
-        # 拼接 x1 (64通道)
         d3 = torch.cat([d3, x1], dim=1)  # [B, 64+64=128, H/4, W/4]
 
         d4 = self.up4(d3)             # d4: [B, 64, H/2, W/2]
-        # 拼接 x0 (64通道)
         d4 = torch.cat([d4, x0], dim=1)  # [B, 64+64=128, H/2, W/2]
 
         d5 = self.up5(d4)             # d5: [B, 64, H, W]
@@ -79,6 +105,9 @@ class ResNetGenerator(nn.Module):
         out = self.final_conv(d5)     # out: [B, output_nc, H, W]
         out = torch.tanh(out)
 
-        out = torch.nn.functional.interpolate(out, size = (h, w), mode="bilinear")
+        out = torch.nn.functional.interpolate(out, size=(h, w), mode="bilinear")  # 恢复到原始大小
 
-        return out
+        # 添加胶片颗粒效果
+        out = self.add_film_grain(out, noise_strength=0.1)
+
+        return out, self.perceptual_loss(x, out)
