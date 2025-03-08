@@ -32,7 +32,8 @@ DigitalFilm：使用神经网络来模拟胶卷风格。
  [English](./readme.md)
 
 [PPT 演示
-](https://incandescent-salmiakki-063eb6.netlify.app/)
+](https://incandescent-salmiakki-063eb6.netlify.app/)  
+[在线Demo](https://richards-sheehy-sudo-digitalfilm-demo.hf.space/)
 
 ## 目录
 

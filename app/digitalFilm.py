@@ -50,7 +50,7 @@ def process_images(model, image):
     with torch.no_grad():
         image = image.unsqueeze(0)
         image = image.to(device)
-        output= model(image)
+        output, _ = model(image)
         return output
            
 def main(argv):
