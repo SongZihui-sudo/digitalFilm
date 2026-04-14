@@ -31,7 +31,8 @@ This README.md is for developers and users
 [简体中文](./chinese.md)
 
 [PowerPoint Presentation
-](https://incandescent-salmiakki-063eb6.netlify.app/)
+](https://incandescent-salmiakki-063eb6.netlify.app/)  
+[Online Demo](https://richards-sheehy-sudo-digitalfilm-demo.hf.space/)
 
 ## Table of Contents
 
