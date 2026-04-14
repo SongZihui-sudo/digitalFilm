@@ -19,3 +19,12 @@ app/dist/*
 app/digitalFilm.spec
 vgg16-397923af.pth
 doc/*
+
+utils/__pycache__/*
+options/__pycache__/*
+checkpoints/*
+/models/__pycache__/*
+runs/*
+.vscode/*
+/models/kernel/build/*
+/kernel/my_model_port/__pycache__/*

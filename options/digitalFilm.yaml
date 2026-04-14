@@ -1,0 +1,71 @@
+global_config:
+  name: "mdoel_kodak_gold_200"
+  checkpoints_dir: "./runs"
+  epoch: 300
+  save_epoch: 0
+  test_per_epoch: 5
+  start_epoch: 0
+  accum_steps: 1
+  lr: [0.0002, 0.00002]
+  grad_max_norm: 2.0
+  use_cudnn_benchmark: True
+  batch_size: 10
+  metrics: ["ssim", "psnr"]
+  uri: "localhost"
+  port: 6666
+  input_size: 512
+  crop_size: 256
+  mid_reso: 1.125
+  pre_transform_A: ["randomcrop"]
+  pre_transform_B: ["randomcrop"]
+  fp16: 1
+  mfast: 0
+  num_workers: 2
+  log_mode: "tensorboard"
+  is_train: True
+  dataroot: "D:/data/filmDataset/Kodak_gold_200"
+  beta: ["0.5_0.9", "0.5_0.9"]
+  optimizer: ["adamw", "adamw"]
+  zero: 0
+  img_log_num_samples: 4
+  seed: 42
+  checkpoint: ""
+
+model_config:
+  use_checkpoint: True
+  
+  # generator
+  in_channels: 3
+  dim: 64
+  dropout: 0.4
+  use_3d: True
+  use_4d: True
+  num_basis_3d: 8
+  num_basis_4d: 4
+  lut3d_dim: 33
+  lut4d_dim: 17
+  num_context_bins: 2
+  feature_dim: 32
+  residual: True
+  learn_blend: True
+  clamp_output: True
+  
+  # discriminator
+  ndf: 64
+  disc_n_layers: 3
+  disc_norm_layer: "instance"
+  disc_no_antialias: False
+  disc_patch_size: 32
+
+  # loss
+  gan_loss: "lsgan"
+  lambda_pix: 1.0
+  lambda_lpips: 2.0
+  lambda_grad: 0.5
+  lambda_color: 0.5
+  lambda_tone: 0.5
+  lambda_gan: 0.4
+  lambda_tv3d: 0.01
+  lambda_mn3d: 10.0
+  lambda_tv4d: 0.01
+  lambda_mn4d: 10.0
