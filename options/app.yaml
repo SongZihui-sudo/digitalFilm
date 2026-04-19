@@ -1,0 +1,6 @@
+global_config:
+  cuda: true
+  server_root: "./server_data"
+  mcp_server_base_url: "http://127.0.0.1:9000"
+  static_server_port: 9000
+  static_server_host: "127.0.0.1"

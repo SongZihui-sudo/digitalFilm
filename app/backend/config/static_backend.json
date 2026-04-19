@@ -1,0 +1,7 @@
+{
+  "UploadDir": "./server_data/upload",
+  "ResultDir": "./server_data/result",
+  "url": "127.0.0.1",
+  "port": "6060",
+  "MainServerURL": "http://127.0.0.1:8080"
+}

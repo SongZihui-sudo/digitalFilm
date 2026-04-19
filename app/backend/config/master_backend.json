@@ -1,0 +1,7 @@
+{
+  "url": "127.0.0.1",
+  "port": "8080",
+  "dbpath": "./server_data/data.db",
+  "staticServer": "http://127.0.0.1:6060",
+  "presets": ["kodak_gold_200", "xxxx"]
+}
