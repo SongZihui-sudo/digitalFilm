@@ -25,8 +25,55 @@ class everyThingOptions():
             for k, v in entries.items():
                 if isinstance(v, dict):
                     self.__dict__[k] = everyThingOptions.DictToObj(v)
+                elif isinstance(v, list):
+                    self.__dict__[k] = [
+                        everyThingOptions.DictToObj(i) if isinstance(i, dict) else i
+                        for i in v
+                    ]
                 else:
                     self.__dict__[k] = v
+
+        def items(self):
+            return self.__dict__.items()
+
+        def keys(self):
+            return self.__dict__.keys()
+
+        def values(self):
+            return self.__dict__.values()
+
+        def get(self, key, default=None):
+            return self.__dict__.get(key, default)
+
+        def __getitem__(self, key):
+            return self.__dict__[key]
+
+        def __setitem__(self, key, value):
+            self.__dict__[key] = value
+
+        def __contains__(self, key):
+            return key in self.__dict__
+
+        def __iter__(self):
+            return iter(self.__dict__)
+
+        def __repr__(self):
+            return repr(self.__dict__)
+
+        def to_dict(self):
+            result = {}
+            for k, v in self.__dict__.items():
+                if isinstance(v, everyThingOptions.DictToObj):
+                    result[k] = v.to_dict()
+                elif isinstance(v, list):
+                    result[k] = [
+                        i.to_dict() if isinstance(i, everyThingOptions.DictToObj) else i
+                        for i in v
+                    ]
+                else:
+                    result[k] = v
+            return result
+
 
     def print_and_save_options(self, opt_dict):
         message = '\n'

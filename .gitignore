@@ -28,3 +28,9 @@ runs/*
 .vscode/*
 /models/kernel/build/*
 /kernel/my_model_port/__pycache__/*
+/server_data/*
+tmp
+app/backend/build/*
+app/backend/server_data/*
+app/backend/checkpoints/*
+app/backend/__pycache__/*

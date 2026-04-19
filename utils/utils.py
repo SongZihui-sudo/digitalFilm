@@ -1,8 +1,14 @@
 import torch
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Optional
 from pprint import pformat
 import random
 import numpy
+import os
+import numpy as np
+import requests
+import io
+import base64
+from PIL import Image
 
 
 def compile_model(m, fast):
@@ -102,3 +108,42 @@ def get_pad_layer(pad_type):
     else:
         print('Pad type [%s] not recognized' % pad_type)
     return PadLayer # type: ignore
+
+def ensure_dir(path: str):
+    os.makedirs(path, exist_ok=True)
+
+def pil_to_tensor(img: Image.Image) -> torch.Tensor:
+    img = img.convert("RGB")
+    arr = np.asarray(img).astype(np.float32) / 255.0
+    arr = np.transpose(arr, (2, 0, 1))
+    return torch.from_numpy(arr).unsqueeze(0)
+
+def tensor_to_pil(tensor: torch.Tensor) -> Image.Image:
+    if tensor.dim() == 4:
+        tensor = tensor[0]
+    tensor = tensor.detach().float().cpu().clamp(0, 1)
+    arr = tensor.numpy()
+    arr = np.transpose(arr, (1, 2, 0))
+    arr = (arr * 255.0).round().astype(np.uint8)
+    return Image.fromarray(arr)
+
+def decode_base64_image(image_base64: str) -> Image.Image:
+    if image_base64.startswith("data:image") and "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+    image_bytes = base64.b64decode(image_base64)
+    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+def load_image_from_url(url: str, timeout: int = 15) -> Image.Image:
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    return Image.open(io.BytesIO(resp.content)).convert("RGB")
+
+def resize_to_multiple_of_16(img: Image.Image, max_size: Optional[int] = 1536) -> Image.Image:
+    w, h = img.size
+    if max_size is not None:
+        scale = min(max_size / max(w, h), 1.0)
+        w = int(w * scale)
+        h = int(h * scale)
+    w = max(16, (w // 16) * 16)
+    h = max(16, (h // 16) * 16)
+    return img.resize((w, h), Image.LANCZOS)

@@ -33,7 +33,7 @@ global_config:
 
 model_config:
   use_checkpoint: True
-  
+
   # generator
   in_channels: 3
   dim: 64
@@ -49,7 +49,7 @@ model_config:
   residual: True
   learn_blend: True
   clamp_output: True
-  
+
   # discriminator
   ndf: 64
   disc_n_layers: 3
