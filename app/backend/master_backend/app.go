@@ -4,7 +4,11 @@ import (
 	"backend/master_backend/db"
 	"backend/utils"
 	"fmt"
+	"log"
+	"net/http"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 type App struct {
@@ -45,6 +49,60 @@ func NewApp(dbPath string, cfg utils.MasterBackendConfig) (*App, error) {
 	return app, nil
 }
 
+func (app *App) setProjects(projces []utils.Project) {
+	app.mu.Lock()
+	app.projects = projces
+	app.mu.Unlock()
+}
+
+func (app *App) GetProjects(ctx *gin.Context) {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	ctx.JSON(http.StatusOK, gin.H{
+		"ok":       true,
+		"projects": app.projects,
+	})
+}
+
+func (app *App) setImages(images map[string][]utils.ImageAsset) {
+	app.mu.Lock()
+	app.images = images
+	app.mu.Unlock()
+}
+
 func (app *App) CloseDB() error {
 	return app.db.CloseDB()
+}
+
+func (app *App) findOriginURLByImageID(imageID string) (string, error) {
+	// 查数据库
+	imageInfo, err := app.db.GetImageInfo(imageID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return imageInfo.OriginalURL, err
+}
+
+func (app *App) GetImageInfo(ctx *gin.Context) {
+	var req GetImageRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+	originURL, err := app.findOriginURLByImageID(req.ImageID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"ok":    false,
+			"error": "image not found",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, GetImageResponse{
+		OK:        true,
+		ImageID:   req.ImageID,
+		OriginURL: originURL,
+	})
 }

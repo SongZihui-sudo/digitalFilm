@@ -2,7 +2,6 @@ package main
 
 import (
 	"backend/utils"
-	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -171,39 +170,6 @@ type RegisterResultResponse struct {
 	ResultURL string `json:"result_url"`
 }
 
-func (app *App) findOriginURLByImageID(imageID string) (string, error) {
-	// 查数据库
-	imageInfo, err := app.db.GetImageInfo(imageID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return imageInfo.OriginalURL, err
-}
-
-func (app *App) GetImageInfo(ctx *gin.Context) {
-	var req GetImageRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"ok":    false,
-			"error": err.Error(),
-		})
-		return
-	}
-	originURL, err := app.findOriginURLByImageID(req.ImageID)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{
-			"ok":    false,
-			"error": "image not found",
-		})
-		return
-	}
-	ctx.JSON(http.StatusOK, GetImageResponse{
-		OK:        true,
-		ImageID:   req.ImageID,
-		OriginURL: originURL,
-	})
-}
-
 func (app *App) RegisterFilmResult(ctx *gin.Context) {
 	var req RegisterResultRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -216,8 +182,17 @@ func (app *App) RegisterFilmResult(ctx *gin.Context) {
 
 	relative := strings.TrimLeft(req.RelativePath, "/")
 	resultURL := app.Cfg.StaticServer + "/" + path.Clean(relative)
-	// 实际项目里这里可落库：
-	// saveGenerationResult(req.ImageID, resultURL, req.Basic, req.Film, ...)
+
+	// 将生成的胶片风格结果信息保存到数据库
+	err := app.db.SaveFilmResult(req.ImageID, req.FileName, resultURL, req.Width, req.Height, req.Basic, req.Film, req.Device)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
 	ctx.JSON(http.StatusOK, RegisterResultResponse{
 		OK:        true,
 		ResultURL: resultURL,
@@ -278,5 +253,93 @@ func (app *App) UpdateImageEditSetting(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "image edit settings updated successfully",
 		"data":    settings,
+	})
+}
+
+// DeleteProject API 路由处理函数
+func (app *App) DeleteProject(ctx *gin.Context) {
+	projectID := ctx.Param("id")
+
+	// 校验 ID 是否为空
+	if projectID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "project id is required"})
+		return
+	}
+
+	// Delete the project from the database and static server
+	err := app.db.DeleteProject(projectID, app.Cfg.StaticServer)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to delete project",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 重新加载
+	projects, err := app.db.LoadProjects()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to delete project",
+			"details": err.Error(),
+		})
+		return
+	}
+	app.setProjects(projects)
+
+	images, err := app.db.LoadImages()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to delete project",
+			"details": err.Error(),
+		})
+		return
+	}
+	app.setImages(images)
+
+	// Return success response
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":    "project deleted successfully",
+		"project_id": projectID,
+	})
+}
+
+// DeleteImage API 路由处理函数
+func (app *App) DeleteImage(ctx *gin.Context) {
+	imageID := ctx.Param("id")
+	if imageID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "image id is required"})
+		return
+	}
+
+	// Delete the image from the database and static server
+	err := app.db.DeleteImage(imageID, app.Cfg.StaticServer)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to delete image",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Delete the image from in-memory data (images map)
+	app.mu.Lock() // Acquire a write lock for thread-safety
+	defer app.mu.Unlock()
+
+	// Find and remove the image from the memory
+	for projectID, images := range app.images {
+		for i, img := range images {
+			if img.ID == imageID {
+				// Remove the image from the in-memory list for this project
+				app.images[projectID] = append(images[:i], images[i+1:]...)
+				break
+			}
+		}
+	}
+
+	// Return success response
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "image deleted successfully",
+		"id":      imageID,
 	})
 }

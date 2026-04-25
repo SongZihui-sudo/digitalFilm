@@ -30,6 +30,10 @@
         <button class="primary-btn" @click="handleCreateProject">
           新建项目
         </button>
+
+        <button class="danger-btn" @click="handleDeleteProject">
+          删除项目
+        </button>
       </div>
     </header>
 
@@ -51,7 +55,7 @@ import { useTheme } from '@/composables/useTheme'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-const { uploadImage, createProject } = useProjectManager()
+const { uploadImage, createProject, deleteProject} = useProjectManager()
 const { currentTheme, toggleTheme } = useTheme()
 
 function openFileDialog() {
@@ -73,6 +77,15 @@ async function handleFileChange(event: Event) {
   } finally {
     // 允许重复上传同一个文件
     input.value = ''
+  }
+}
+
+async function handleDeleteProject() {
+  try {
+    await deleteProject()
+  } catch(error) {
+    console.error('delete project failed:', error)
+    alert('删除项目失败')
   }
 }
 

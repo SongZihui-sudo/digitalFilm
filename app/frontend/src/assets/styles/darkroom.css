@@ -52,6 +52,27 @@ body {
   background: linear-gradient(135deg, var(--accent-hover), #7384ff);
 }
 
+.danger-btn {
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background-color: #ff4d4f; /* 使用更柔和的 UI 红色，而不是纯 red */
+  color: #ffffff;
+  border: 1px solid #ff4d4f;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+  box-shadow: 0 8px 24px rgba(124, 140, 255, 0.22);
+}
+
+/* 添加鼠标悬浮时的变色效果，提升用户体验 */
+.danger-btn:hover {
+  transform: translateY(-1px);
+  background-color: #ff7875;
+  border-color: #ff7875;
+}
+
 .secondary-btn {
   height: 40px;
   border: 1px solid var(--border-color);

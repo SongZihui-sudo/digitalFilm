@@ -3,4 +3,4 @@ global_config:
   server_root: "./server_data"
   static_server_port: 6060
   static_server_host: "127.0.0.1"
-  "master_server_url": "http://127.0.0.1:8080"
+  master_server_url: "http://127.0.0.1:8080"

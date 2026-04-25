@@ -30,5 +30,8 @@ export const useProjectStore = defineStore('project', {
     setCurrentImage(image: ImageAsset | null) {
       this.currentImage = image;
     },
+    getCurrentProject() {
+      return this.currentProject;
+    }
   },
 });

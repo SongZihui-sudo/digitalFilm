@@ -1,8 +1,21 @@
 <template>
   <div class="base-slider">
     <div class="base-slider__header">
-      <span class="base-slider__label">{{ label }}</span>
-      <span class="base-slider__value">{{ displayValue }}</span>
+      <span 
+        class="base-slider__label" 
+        title="双击重置"
+        style="cursor: pointer; user-select: none;"
+        @dblclick="reset"
+      >
+        {{ label }}
+      </span>
+      <span 
+        class="base-slider__value" 
+        style="cursor: pointer;" 
+        @click="reset"
+      >
+        {{ displayValue }}
+      </span>
     </div>
 
     <input
@@ -20,13 +33,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   label: string
   modelValue: number
   min?: number
   max?: number
   step?: number
-}>()
+  // 3. 新增默认值属性，默认为 0
+  defaultValue?: number 
+}>(), {
+  min: -100,
+  max: 100,
+  step: 1,
+  defaultValue: 0
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: number): void
@@ -37,8 +57,13 @@ function onInput(e: Event) {
   emit('update:modelValue', value)
 }
 
+function reset() {
+  emit('update:modelValue', props.defaultValue)
+}
+
 const displayValue = computed(() => {
-  return Number(props.modelValue).toFixed(props.step && props.step < 1 ? 2 : 0)
+  const val = Number(props.modelValue || 0)
+  return val.toFixed(props.step && props.step < 1 ? 2 : 0)
 })
 </script>
 
@@ -49,41 +74,14 @@ const displayValue = computed(() => {
   gap: 10px;
 }
 
-.base-slider__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
 .base-slider__label {
   font-size: 13px;
   color: var(--text-secondary);
+  transition: color 0.2s;
 }
 
-.base-slider__value {
-  font-size: 12px;
-  color: var(--text-primary);
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.base-slider__input {
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent-soft), rgba(255, 255, 255, 0.08));
-  outline: none;
-}
-
-.base-slider__input::-webkit-slider-thumb {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 4px rgba(124, 140, 255, 0.18);
-  cursor: pointer;
+/* 如果数值不是默认值，可以给 label 一个高亮色（可选） */
+.base-slider:has(input:not([value="0"])) .base-slider__label {
+  color: var(--accent-color);
 }
 </style>

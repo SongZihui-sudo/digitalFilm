@@ -49,6 +49,8 @@ func main() {
 	router.GET("/api/film/presets", app.GetPresets)
 	router.GET("/api/images/:id/settings", app.GetImageEditSetting)
 	router.POST("/api/images/:id/settings", app.UpdateImageEditSetting)
+	router.DELETE("/api/projects/:id", app.DeleteProject)
+	router.DELETE("/api/images/:id", app.DeleteImage)
 
 	err = router.Run(fmt.Sprintf("%s:%s", backendConfig.Url, backendConfig.Port))
 	if err != nil {
