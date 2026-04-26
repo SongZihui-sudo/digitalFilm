@@ -34,6 +34,8 @@
         <button class="danger-btn" @click="handleDeleteProject">
           删除项目
         </button>
+
+        <LoginModal v-model:visible="showLoginModal" />
       </div>
     </header>
 
@@ -52,11 +54,16 @@ import LeftSidebar from '@/components/layout/LeftSidebar.vue'
 import MainPreview from '@/components/layout/MainPreview.vue'
 import RightPanel from '@/components/layout/RightPanel.vue'
 import { useTheme } from '@/composables/useTheme'
+import { useUserStore } from '@/stores/userStore'
+import LoginModal from '@/components/common/LoginModal.vue'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const { uploadImage, createProject, deleteProject} = useProjectManager()
 const { currentTheme, toggleTheme } = useTheme()
+
+const userStore = useUserStore()
+const showLoginModal = ref(false)
 
 function openFileDialog() {
   fileInputRef.value?.click()
@@ -68,12 +75,20 @@ async function handleFileChange(event: Event) {
 
   if (!file) return
 
+  // 1. 检查登录状态
+  if (!userStore.isLoggedIn) {
+    // 如果未登录，弹出登录模态框
+    showLoginModal.value = true
+    // 重置 input，防止关闭登录框后无法再次触发同一个文件的上传
+    input.value = ''
+    return
+  }
+
+  // 2. 已登录，执行上传
   try {
     await uploadImage(file)
-    alert('上传成功')
   } catch (error) {
-    console.error('upload failed:', error)
-    alert('上传失败')
+    console.error('上传失败:', error)
   } finally {
     // 允许重复上传同一个文件
     input.value = ''
@@ -81,6 +96,12 @@ async function handleFileChange(event: Event) {
 }
 
 async function handleDeleteProject() {
+  // 1. 拦截未登录用户
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   try {
     await deleteProject()
   } catch(error) {
@@ -90,6 +111,12 @@ async function handleDeleteProject() {
 }
 
 async function handleCreateProject() {
+  // 1. 拦截未登录用户（在弹出输入框之前拦截体验更好）
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   const name = window.prompt('请输入新项目名称')
   if (!name) return
 

@@ -12,6 +12,7 @@ import (
 )
 
 type Project struct {
+	UserID    string `json:"userId"`
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"createdAt"`
@@ -19,6 +20,7 @@ type Project struct {
 }
 
 type ImageAsset struct {
+	UserID       string `json:"userId"`
 	ID           string `json:"id"`
 	ProjectID    string `json:"projectId"`
 	Name         string `json:"name"`
@@ -31,6 +33,7 @@ type ImageAsset struct {
 
 type ImageEditSettings struct {
 	ImageID     string `json:"imageId"`
+	UserID      string `json:"userId"`
 	Exposure    int    `json:"exposure"`
 	Contrast    int    `json:"contrast"`
 	Highlights  int    `json:"highlights"`
@@ -49,6 +52,13 @@ type MasterBackendConfig struct {
 	DBPATH       string   `json:"dbpath"`
 	StaticServer string   `json:"staticServer"`
 	Presets      []string `json:"presets"`
+}
+
+type User struct {
+	ID        string
+	Username  string
+	Email     string
+	CreatedAt string
 }
 
 func LoadConfig(path string) (*MasterBackendConfig, error) {

@@ -202,6 +202,9 @@ func saveUploadedFile(ctx *gin.Context, baseDir, urlPrefix string, MainServerURL
 		return
 	}
 
+	authHeader := ctx.GetHeader("Authorization")
+
+	// 2. 准备转发给主服务器的数据
 	img := utils.ImageAsset{
 		ID:           imageID,
 		ProjectID:    projectID,
@@ -213,45 +216,45 @@ func saveUploadedFile(ctx *gin.Context, baseDir, urlPrefix string, MainServerURL
 		CreatedAt:    time.Now().Format(time.RFC3339),
 	}
 
-	// 转发给主服务器
 	body, err := json.Marshal(img)
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "marshal image metadata failed",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "marshal failed"})
 		return
 	}
 
-	resp, err := http.Post(
-		MainServerURL+"/internal/images/upload",
-		"application/json",
-		bytes.NewBuffer(body),
-	)
+	// 3. 使用 http.NewRequest 来构造请求，以便设置 Header
+	req, err := http.NewRequest("POST", MainServerURL+"/internal/images/upload", bytes.NewBuffer(body))
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusBadGateway, gin.H{
-			"error": "forward to main server failed",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
+		return
+	}
+
+	// 重要：将原始用户的 Token 转发给 Main 服务器
+	req.Header.Set("Content-Type", "application/json")
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	// 4. 执行转发
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		_ = os.Remove(savePath)
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "forward to main server failed"})
 		return
 	}
 	defer resp.Body.Close()
 
+	// ... 后续读取响应并返回给前端的逻辑保持不变 ...
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusBadGateway, gin.H{
-			"error": "read main server response failed",
-		})
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "read main server response failed"})
 		return
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_ = os.Remove(savePath)
-		ctx.Data(resp.StatusCode, "application/json", respBody)
-		return
-	}
-
-	// 直接把主服务器响应返回给前端
-	ctx.Data(http.StatusOK, "application/json", respBody)
+	// 透传主服务器的状态码和内容
+	ctx.Data(resp.StatusCode, "application/json", respBody)
 }

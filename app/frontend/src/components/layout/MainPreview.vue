@@ -67,6 +67,8 @@
         </div>
       </div>
     </div>
+
+    <LoginModal v-model:visible="showLoginModal" />
   </main>
 </template>
 
@@ -77,6 +79,8 @@ import { useEditorStore } from '@/stores/editorStore'
 import BeforeAfterSlider from '@/components/editor/BeforeAfterSlider.vue'
 import { imageEditorService } from '@/services/ImageEditorService'
 import { imageApi } from '@/api/imageApi'
+import { useUserStore } from '@/stores/userStore'
+import LoginModal from '@/components/common/LoginModal.vue'
 
 const projectStore = useProjectStore()
 const editorStore = useEditorStore()
@@ -86,6 +90,9 @@ const showCompare = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const loadingSettings = ref(false)
+
+const userStore = useUserStore()
+const showLoginModal = ref(false)
 
 const currentImage = computed(() => projectStore.currentImage)
 const currentImageId = computed(() => currentImage.value?.id || '')
@@ -132,6 +139,11 @@ function clamp(value: number, min: number, max: number) {
 }
 
 async function handleDeleteImage() {
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   if (!currentImageId.value) {
     alert('请先选择图片')
     return
@@ -154,6 +166,11 @@ async function handleDeleteImage() {
 }
 
 async function handleSaveSettings() {
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   if (!currentImageId.value) {
     alert('请先选择图片')
     return

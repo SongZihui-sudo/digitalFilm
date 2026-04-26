@@ -13,6 +13,7 @@ from PIL import Image, ImageFilter, ImageEnhance
 import os
 import sys
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request, Header
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../.."))
@@ -146,36 +147,33 @@ class DigitalFilmHTTPService:
             raise ValueError("No models loaded. Please check checkpoints config.")
         return models
 
-    def get_origin_image_url(self, image_id: str) -> str:
+    def get_origin_image_url(self, image_id: str, auth_token: str) -> str:
         url = self.master_server_url.rstrip("/") + "/internal/images/get"
-        payload = {"image_id": image_id}
+        headers = {"Authorization": auth_token} if auth_token else {}
 
-        resp = requests.post(url, json=payload, timeout=30)
+        # 这里的 payload 对应你后端的 GetImageRequest 结构体
+        resp = requests.post(url, json={"image_id": image_id}, headers=headers, timeout=10)
         if resp.status_code != 200:
-            raise ValueError(f"Master get image failed: {resp.text}")
+            raise ValueError(f"Fetch origin URL failed: {resp.text}")
 
         data = resp.json()
-        if not data.get("ok"):
-            raise ValueError(f"Master get image failed: {data}")
-
-        origin_url = data.get("origin_url", "")
-        if not origin_url:
-            raise ValueError("origin_url is empty")
-
-        return origin_url
+        return data.get("origin_url")
 
     def register_result_to_master(
-            self,
-            image_id: str,
-            file_name: str,
-            relative_path: str,
-            width: int,
-            height: int,
-            basic: Dict[str, Any],
-            film: Dict[str, Any],
-            device: str,
+        self,
+        image_id: str,
+        file_name: str,
+        relative_path: str,
+        width: int,
+        height: int,
+        basic: Dict[str, Any],
+        film: Dict[str, Any],
+        device: str,
+        auth_token: str = None  # 接收从前端透传过来的 Token
     ) -> str:
         url = self.master_server_url.rstrip("/") + "/internal/film/register_result"
+
+        # 构建请求体
         payload = {
             "image_id": image_id,
             "file_name": file_name,
@@ -187,19 +185,33 @@ class DigitalFilmHTTPService:
             "device": device,
         }
 
-        resp = requests.post(url, json=payload, timeout=30)
-        if resp.status_code != 200:
-            raise ValueError(f"Master register result failed: {resp.text}")
+        # --- 修改部分：构建请求头 ---
+        headers = {}
+        if auth_token:
+            # 确保将 Token 放入 Authorization 字段
+            headers["Authorization"] = auth_token
+        # --------------------------
 
-        data = resp.json()
-        if not data.get("ok"):
-            raise ValueError(f"Master register result failed: {data}")
+        try:
+            # 发送请求时带上 headers
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
 
-        result_url = data.get("result_url", "")
-        if not result_url:
-            raise ValueError("result_url is empty")
+            if resp.status_code != 200:
+                raise ValueError(f"Master register result failed (Status {resp.status_code}): {resp.text}")
 
-        return result_url
+            data = resp.json()
+            if not data.get("ok"):
+                raise ValueError(f"Master register result logic failed: {data.get('error', 'Unknown error')}")
+
+            result_url = data.get("result_url", "")
+            if not result_url:
+                raise ValueError("result_url is empty in master response")
+
+            return result_url
+
+        except requests.exceptions.RequestException as e:
+            # 捕获网络层面的异常（如超时、连接拒绝）
+            raise ValueError(f"Connect to master server failed: {str(e)}")
 
     def apply_basic_adjustments(self, image: Image.Image, basic: BasicAdjustments) -> Image.Image:
         image = image.convert("RGB")
@@ -351,14 +363,15 @@ class DigitalFilmHTTPService:
         }
 
     def process(
-            self,
-            image_id: str,
-            basic: BasicAdjustments,
-            film: FilmStyleSettings,
-            max_size: int = 1536
+        self,
+        image_id: str,
+        basic: BasicAdjustments,
+        film: FilmStyleSettings,
+        max_size: int = 1536,
+        auth_token: str = None  # 接收 Token
     ) -> Dict[str, Any]:
         # 1. 从 master 获取原图 URL
-        origin_url = self.get_origin_image_url(image_id)
+        origin_url = self.get_origin_image_url(image_id, auth_token)
 
         # 2. 下载原图
         image = load_image_from_url(origin_url)
@@ -386,7 +399,7 @@ class DigitalFilmHTTPService:
             basic=basic.dict(),
             film=film.dict(),
             device=self.device,
-        )
+            auth_token=auth_token)
 
         # 8. 返回前端
         return {
@@ -429,15 +442,21 @@ def health():
 
 
 @app.post("/api/film/generate")
-def film_generate(req: FilmGenerateRequest):
+def film_generate(
+        req: FilmGenerateRequest,
+        authorization: str = Header(None)  # 自动获取请求头中的 Authorization
+):
     try:
         return service.process(
             image_id=req.image_id,
             basic=req.basic,
             film=req.film,
             max_size=req.max_size,
+            auth_token=authorization,  # 传递 Token
         )
     except Exception as e:
+        # 建议记录日志方便排查
+        print(f"Generation error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
