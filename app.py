@@ -1,15 +1,14 @@
 import gradio as gr
 import torch
 import torchvision.transforms as transforms
-import os
-
-from models.digitalFilm_v2 import digitalFilmv2
-from options.options import everyThingOptions
 import subprocess, sys, os
 
 kernel_dir = os.path.join(os.path.dirname(__file__), "kernel")
 if not os.path.exists(os.path.join(kernel_dir, "build")):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", kernel_dir, "--no-build-isolation"])
+  subprocess.check_call([sys.executable, "-m", "pip", "install", kernel_dir, "--no-build-isolation"])
+
+from models.digitalFilm_v2 import digitalFilmv2
+from options.options import everyThingOptions
 
 MAX_WIDTH = 2457
 MAX_HEIGHT = 1843
