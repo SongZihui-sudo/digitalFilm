@@ -22,6 +22,12 @@ const authInterceptor = (config: any) => {
   const token = (userStore && (userStore.token?.value ?? userStore.token)) || null
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`
+  } else {
+    // 如果没有普通用户 token，尝试使用管理员 token
+    const adminToken = localStorage.getItem('admin_token')
+    if (adminToken) {
+      config.headers['Authorization'] = `Bearer ${adminToken}`
+    }
   }
   return config
 }

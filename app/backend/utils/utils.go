@@ -55,10 +55,11 @@ type MasterBackendConfig struct {
 }
 
 type User struct {
-	ID        string
-	Username  string
-	Email     string
-	CreatedAt string
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	IsAdmin   bool   `json:"isAdmin"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func LoadConfig(path string) (*MasterBackendConfig, error) {

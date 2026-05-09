@@ -154,6 +154,16 @@ func (DBPtr *AppDb) InitTables() error {
 	return nil
 }
 
+// Migration: 添加 admin 列到 users 表
+func (DBPtr *AppDb) MigrateAdminColumn() error {
+	_, err := DBPtr.DB.Exec(`ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0`)
+	if err != nil {
+		// 列可能已经存在，忽略错误
+		return nil
+	}
+	return nil
+}
+
 // ==========================================
 // 用户认证相关方法
 // ==========================================
@@ -191,9 +201,9 @@ func (DBPtr *AppDb) LoginUser(username, password string) (*utils.User, error) {
 	var passwordHash string
 
 	err := DBPtr.DB.QueryRow(`
-		SELECT id, username, password_hash, email, created_at
+		SELECT id, username, password_hash, email, COALESCE(is_admin, 0), created_at
 		FROM users WHERE username = ?
-	`, username).Scan(&user.ID, &user.Username, &passwordHash, &user.Email, &user.CreatedAt)
+	`, username).Scan(&user.ID, &user.Username, &passwordHash, &user.Email, &user.IsAdmin, &user.CreatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -216,9 +226,9 @@ func (DBPtr *AppDb) GetUserInfo(userID string) (*utils.User, error) {
 	var user utils.User
 
 	err := DBPtr.DB.QueryRow(`
-		SELECT id, username, email, created_at
+		SELECT id, username, email, COALESCE(is_admin, 0), created_at
 		FROM users WHERE id = ?
-	`, userID).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+	`, userID).Scan(&user.ID, &user.Username, &user.Email, &user.IsAdmin, &user.CreatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -564,4 +574,116 @@ func (DBPtr *AppDb) SaveFilmResult(userID, imageID, fileName, resultURL string, 
 	}
 
 	return nil
+}
+
+// ==========================================
+// 管理员相关方法
+// ==========================================
+
+// ListAllUsers 获取所有用户列表 (管理员权限，不返回密码)
+func (DBPtr *AppDb) ListAllUsers() ([]utils.User, error) {
+	rows, err := DBPtr.DB.Query(`
+		SELECT id, username, email, COALESCE(is_admin, 0), created_at
+		FROM users
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query users failed: %w", err)
+	}
+	defer rows.Close()
+
+	var users []utils.User
+	for rows.Next() {
+		var u utils.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.IsAdmin, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user failed: %w", err)
+		}
+		users = append(users, u)
+	}
+
+	if users == nil {
+		users = []utils.User{}
+	}
+
+	return users, nil
+}
+
+// AdminSetPassword 管理员直接设置用户密码（无需旧密码验证）
+func (DBPtr *AppDb) AdminSetPassword(userID, newPassword string) error {
+	newHashedBytes, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash new password failed: %w", err)
+	}
+
+	result, err := DBPtr.DB.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(newHashedBytes), userID)
+	if err != nil {
+		return fmt.Errorf("update password failed: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
+// AdminCreateUser 管理员创建新用户
+func (DBPtr *AppDb) AdminCreateUser(username, password, email string) (*utils.User, error) {
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password failed: %w", err)
+	}
+
+	user := &utils.User{
+		ID:        utils.GenerateUniqueID(),
+		Username:  username,
+		Email:     email,
+		IsAdmin:   false,
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}
+
+	_, err = DBPtr.DB.Exec(`
+		INSERT INTO users (id, username, password_hash, email, is_admin, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, user.ID, user.Username, string(hashedBytes), user.Email, user.IsAdmin, user.CreatedAt)
+
+	if err != nil {
+		return nil, fmt.Errorf("insert user failed (username might exist): %w", err)
+	}
+
+	return user, nil
+}
+
+// AdminDeleteUser 管理员删除用户及其所有数据（级联）
+func (DBPtr *AppDb) AdminDeleteUser(userID string) error {
+	result, err := DBPtr.DB.Exec("DELETE FROM users WHERE id = ?", userID)
+	if err != nil {
+		return fmt.Errorf("delete user failed: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
+// AdminToggleAdmin 切换用户的管理员状态
+func (DBPtr *AppDb) AdminToggleAdmin(userID string) (*utils.User, error) {
+	// 先查询当前状态
+	var isAdmin bool
+	err := DBPtr.DB.QueryRow("SELECT COALESCE(is_admin, 0) FROM users WHERE id = ?", userID).Scan(&isAdmin)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	newAdmin := !isAdmin
+	_, err = DBPtr.DB.Exec("UPDATE users SET is_admin = ? WHERE id = ?", newAdmin, userID)
+	if err != nil {
+		return nil, fmt.Errorf("toggle admin failed: %w", err)
+	}
+
+	return DBPtr.GetUserInfo(userID)
 }

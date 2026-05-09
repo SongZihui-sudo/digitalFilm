@@ -40,6 +40,9 @@
             </div>
           </div>
           <div class="popover-actions">
+            <router-link to="/admin/dashboard" class="secondary-btn full-width admin-link" @click="showUserInfo = false">
+              管理后台
+            </router-link>
             <button class="secondary-btn full-width" @click="handleLogout">
               退出登录
             </button>
@@ -303,8 +306,19 @@ onUnmounted(() => {
 }
 
 .popover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   border-top: 1px solid #f0f0f0;
   padding-top: 12px;
+}
+
+.admin-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 14px;
 }
 
 .full-width {

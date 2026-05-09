@@ -1,11 +1,7 @@
 import gradio as gr
 import torch
 import torchvision.transforms as transforms
-import subprocess, sys, os
-
-kernel_dir = os.path.join(os.path.dirname(__file__), "kernel")
-if not os.path.exists(os.path.join(kernel_dir, "build")):
-  subprocess.check_call([sys.executable, "-m", "pip", "install", kernel_dir, "--no-build-isolation"])
+import os
 
 from models.digitalFilm_v2 import digitalFilmv2
 from options.options import everyThingOptions
