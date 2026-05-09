@@ -10,4 +10,9 @@ export const projectApi = {
     const { data } = await apiClient.post('/api/create_projects', { name });
     return data;
   },
+
+  async deleteProject(id: string) {
+    const { data } = await apiClient.delete(`/api/projects/${id}`);
+    return data;
+  }
 };

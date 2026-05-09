@@ -15,6 +15,13 @@ The project's objective is to render digital images with a film-like aesthetic u
 
 ---
 
+## Quick Start
+
+Run the demo  
+```bash
+python demo.py
+```
+
 ## Feature Overview
 
 - Uses neural networks to learn the mapping from digital images to film-style images.
@@ -156,6 +163,11 @@ python image_server.py
 master_backend
 static_backend
 app
+```
+
+You need to manually execute SQL to set up the first administrator user.
+```sql
+UPDATE users SET is_admin = 1 WHERE username = 'YourUsername';
 ```
 
 ## DigitalFilm App Feature Overview

@@ -31,6 +31,20 @@ export function useProjectManager() {
     }
   }
 
+  async function deleteProject() {
+    try {
+      await projectService.deleteProject(projectStore.getCurrentProject().id)
+      projectStore.setCurrentProject(null)  // Clear current project
+      projectStore.setCurrentImage(null)    // Clear current image
+      projectStore.setCurrentImages([])     // Clear current images
+      await loadProjects()  // Reload projects list
+      alert("删除项目成功")
+    } catch (error) {
+      console.error('DeleteProject failed:', error)
+      alert('删除项目失败')
+    }
+  }
+
   async function loadProjectImages(projectId: string) {
     try {
       const images = await imageApi.listProjectImages(projectId)
@@ -64,5 +78,6 @@ export function useProjectManager() {
     createProject,
     loadProjectImages,
     uploadImage,
+    deleteProject
   }
 }

@@ -1,5 +1,7 @@
 from setuptools import setup
 from torch.utils.cpp_extension import CUDAExtension, BuildExtension
+import os
+kernel_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 setup(
@@ -17,8 +19,10 @@ setup(
                 "./quadrilinear/src/quadrilinear4d_kernel.cu",
                 "./quadrilinear/src/quadrilinear4d.cpp"
             ],
-            include_dirs = [ "D:/projects/digitalFilm/models/kernel/trilinear/include",
-                             "D:/projects/digitalFilm/models/kernel/quadrilinear/include"],
+            include_dirs = [
+                os.path.join(kernel_dir, "trilinear", "include"),
+                os.path.join(kernel_dir, "quadrilinear", "include"),
+            ],
             extra_compile_args = {
                 "cxx": [],
                 "nvcc": [ "-O3",

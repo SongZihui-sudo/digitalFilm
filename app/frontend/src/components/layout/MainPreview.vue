@@ -10,11 +10,19 @@
 
       <div class="main-preview__tools">
         <button
-          class="secondary-btn"
+          class="primary-btn"
           @click="handleSaveSettings"
           :disabled="!currentImageId || saving"
         >
-          {{ saving ? '保存中...' : '保存参数' }}
+          {{ saving ? '保存中...' : '保存' }}
+        </button>
+
+        <button
+          class="danger-btn"
+          @click="handleDeleteImage"
+          :disabled="!currentImageId || saving"
+        >
+          {{ saving ? '删除中...' : '删除' }}
         </button>
 
         <button class="secondary-btn" @click="fitToScreen = !fitToScreen">
@@ -59,6 +67,8 @@
         </div>
       </div>
     </div>
+
+    <LoginModal v-model:visible="showLoginModal" />
   </main>
 </template>
 
@@ -68,6 +78,9 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useEditorStore } from '@/stores/editorStore'
 import BeforeAfterSlider from '@/components/editor/BeforeAfterSlider.vue'
 import { imageEditorService } from '@/services/ImageEditorService'
+import { imageApi } from '@/api/imageApi'
+import { useUserStore } from '@/stores/userStore'
+import LoginModal from '@/components/common/LoginModal.vue'
 
 const projectStore = useProjectStore()
 const editorStore = useEditorStore()
@@ -75,7 +88,11 @@ const editorStore = useEditorStore()
 const fitToScreen = ref(true)
 const showCompare = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const loadingSettings = ref(false)
+
+const userStore = useUserStore()
+const showLoginModal = ref(false)
 
 const currentImage = computed(() => projectStore.currentImage)
 const currentImageId = computed(() => currentImage.value?.id || '')
@@ -121,7 +138,39 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
+async function handleDeleteImage() {
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
+  if (!currentImageId.value) {
+    alert('请先选择图片')
+    return
+  }
+
+  deleting.value = true
+  try {
+    await imageEditorService.deleteImage(currentImage.value.id)
+    projectStore.setCurrentImage(null)
+    const images = await imageApi.listProjectImages(projectStore.getCurrentProject().id)
+    projectStore.setCurrentImages(images)
+    alert("当前图片已删除")
+
+  } catch (error) {
+    console.error('delete image edit settings failed:', error)
+    alert('当前图片删除失败')
+  } finally {
+    deleting.value = false
+  }
+}
+
 async function handleSaveSettings() {
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   if (!currentImageId.value) {
     alert('请先选择图片')
     return

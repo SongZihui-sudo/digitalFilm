@@ -3,10 +3,16 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type Project struct {
+	UserID    string `json:"userId"`
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"createdAt"`
@@ -14,6 +20,7 @@ type Project struct {
 }
 
 type ImageAsset struct {
+	UserID       string `json:"userId"`
 	ID           string `json:"id"`
 	ProjectID    string `json:"projectId"`
 	Name         string `json:"name"`
@@ -26,6 +33,7 @@ type ImageAsset struct {
 
 type ImageEditSettings struct {
 	ImageID     string `json:"imageId"`
+	UserID      string `json:"userId"`
 	Exposure    int    `json:"exposure"`
 	Contrast    int    `json:"contrast"`
 	Highlights  int    `json:"highlights"`
@@ -46,6 +54,14 @@ type MasterBackendConfig struct {
 	Presets      []string `json:"presets"`
 }
 
+type User struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	IsAdmin   bool   `json:"isAdmin"`
+	CreatedAt string `json:"createdAt"`
+}
+
 func LoadConfig(path string) (*MasterBackendConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -56,4 +72,47 @@ func LoadConfig(path string) (*MasterBackendConfig, error) {
 		return nil, fmt.Errorf("parse config file failed: %w", err)
 	}
 	return &cfg, nil
+}
+
+func GenerateUniqueID() string {
+	return uuid.New().String()
+}
+
+func DeleteFileFromStaticServer(fileType, filename, StaticServer string) error {
+	// 1. 确定最终要删除的文件名 (source 自动补全 .jpg，result 保持原样)
+	var targetFilename string
+	if fileType == "source" {
+		targetFilename = fmt.Sprintf("%s.jpg", filename)
+	} else if fileType == "result" {
+		targetFilename = filename
+	} else {
+		return fmt.Errorf("invalid file type provided: %s", fileType)
+	}
+
+	// 2. 构造兼容服务端 ctx.Param 的 URL 路径
+	// 清理 StaticServer 末尾可能多余的斜杠，防止出现双斜杠
+	baseURL := strings.TrimRight(StaticServer, "/")
+
+	// 拼接为 /api/images/:type/:id 的格式
+	reqURL := fmt.Sprintf("%s/api/images/%s/%s", baseURL, fileType, targetFilename)
+
+	// 3. 发送 DELETE 请求
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodDelete, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request to static server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 4. 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete file from static server, status: %v", resp.StatusCode)
+	}
+
+	return nil
 }

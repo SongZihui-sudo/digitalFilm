@@ -7,7 +7,7 @@
       </button>
     </div>
 
-    <ul class="project-list__items">
+    <ul v-if="userStore.isLoggedIn" class="project-list__items">
       <li
         v-for="project in store.projects"
         :key="project.id"
@@ -22,22 +22,44 @@
         </div>
       </li>
     </ul>
+
+    <div v-else class="login-placeholder" @click="showLoginModal = true">
+      请先登录以查看项目
+    </div>
+
+    <LoginModal v-model:visible="showLoginModal" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useProjectStore } from '@/stores/projectStore'
 import { useProjectManager } from '@/composables/useProjectManager'
+import { useUserStore } from '@/stores/userStore'
+import { watchEffect } from 'vue'
+import LoginModal from '@/components/common/LoginModal.vue'
 
 const store = useProjectStore()
 const { loadProjects, createProject, loadProjectImages } = useProjectManager()
+const userStore = useUserStore()
+const showLoginModal = ref(false)
 
 onMounted(async () => {
   await loadProjects()
 })
 
+watchEffect(() => {
+  if (userStore.isLoggedIn) {
+    loadProjects()
+  }
+})
+
 async function handleCreateProject() {
+  if (!userStore.isLoggedIn) {
+    showLoginModal.value = true
+    return
+  }
+
   const name = window.prompt('请输入项目名称')
   if (!name) return
   await createProject(name)
@@ -172,5 +194,20 @@ async function selectProject(projectId: string) {
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.login-placeholder {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.login-placeholder:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 </style>

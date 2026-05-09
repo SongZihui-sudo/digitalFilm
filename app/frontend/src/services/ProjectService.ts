@@ -8,4 +8,8 @@ export class ProjectService {
   async createProject(name: string) {
     return await projectApi.createProject(name);
   }
+
+  async deleteProject(name: string) {
+    return await projectApi.deleteProject(name)
+  }
 }

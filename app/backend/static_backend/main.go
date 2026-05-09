@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -85,6 +86,7 @@ func main() {
 	})
 
 	router.POST("/api/images/upload", app.uploadFileHandler)
+	router.DELETE("/api/images/:type/:id", app.deleteFileHandler)
 
 	url := spew.Sprintf("%s:%s", config.Url, config.Port)
 	log.Printf("server running at %s", url)
@@ -96,6 +98,50 @@ func main() {
 
 func (app *App) uploadFileHandler(ctx *gin.Context) {
 	saveUploadedFile(ctx, app.Cfg.UploadPath, "/uploads", app.Cfg.MainServerURL, fmt.Sprintf("http://%s:%s", app.Cfg.Url, app.Cfg.Port))
+}
+
+func (app *App) deleteFileHandler(ctx *gin.Context) {
+	// 获取 URL 中的文件类型和文件名/ID (例如 source 或 result, 12345.jpg)
+	fileType := ctx.Param("type")
+	filename := ctx.Param("id")
+
+	if filename == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file id/name is required"})
+		return
+	}
+
+	// 安全校验：防止目录穿越漏洞 (Directory Traversal)
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
+		return
+	}
+
+	// 根据文件类型选择文件的路径
+	var filePath string
+	if fileType == "source" {
+		// 如果是源文件，使用 UploadPath
+		filePath = filepath.Join(app.Cfg.UploadPath, filename)
+	} else if fileType == "result" {
+		// 如果是胶片结果文件，使用 ResultPath
+		filePath = filepath.Join(app.Cfg.ResultPath, filename)
+	} else {
+		// 如果文件类型无效，返回错误
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid file type"})
+		return
+	}
+
+	// 执行删除
+	err := os.Remove(filePath)
+	if err != nil && !os.IsNotExist(err) { // 如果文件本身就不存在，直接放行即可
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to delete file on static server",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 删除成功
+	ctx.JSON(http.StatusOK, gin.H{"message": "file deleted successfully"})
 }
 
 func saveUploadedFile(ctx *gin.Context, baseDir, urlPrefix string, MainServerURL string, PublicBaseURL string) {
@@ -156,6 +202,9 @@ func saveUploadedFile(ctx *gin.Context, baseDir, urlPrefix string, MainServerURL
 		return
 	}
 
+	authHeader := ctx.GetHeader("Authorization")
+
+	// 2. 准备转发给主服务器的数据
 	img := utils.ImageAsset{
 		ID:           imageID,
 		ProjectID:    projectID,
@@ -167,45 +216,45 @@ func saveUploadedFile(ctx *gin.Context, baseDir, urlPrefix string, MainServerURL
 		CreatedAt:    time.Now().Format(time.RFC3339),
 	}
 
-	// 转发给主服务器
 	body, err := json.Marshal(img)
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "marshal image metadata failed",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "marshal failed"})
 		return
 	}
 
-	resp, err := http.Post(
-		MainServerURL+"/internal/images/upload",
-		"application/json",
-		bytes.NewBuffer(body),
-	)
+	// 3. 使用 http.NewRequest 来构造请求，以便设置 Header
+	req, err := http.NewRequest("POST", MainServerURL+"/internal/images/upload", bytes.NewBuffer(body))
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusBadGateway, gin.H{
-			"error": "forward to main server failed",
-		})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "create request failed"})
+		return
+	}
+
+	// 重要：将原始用户的 Token 转发给 Main 服务器
+	req.Header.Set("Content-Type", "application/json")
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	// 4. 执行转发
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		_ = os.Remove(savePath)
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "forward to main server failed"})
 		return
 	}
 	defer resp.Body.Close()
 
+	// ... 后续读取响应并返回给前端的逻辑保持不变 ...
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		_ = os.Remove(savePath)
-		ctx.JSON(http.StatusBadGateway, gin.H{
-			"error": "read main server response failed",
-		})
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "read main server response failed"})
 		return
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_ = os.Remove(savePath)
-		ctx.Data(resp.StatusCode, "application/json", respBody)
-		return
-	}
-
-	// 直接把主服务器响应返回给前端
-	ctx.Data(http.StatusOK, "application/json", respBody)
+	// 透传主服务器的状态码和内容
+	ctx.Data(resp.StatusCode, "application/json", respBody)
 }

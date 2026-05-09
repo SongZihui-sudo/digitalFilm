@@ -58,6 +58,12 @@ export class ImageEditorService {
 
     return data.data ?? data
   }
+
+  async deleteImage(imageID: string) {
+    // 请求变成: DELETE /api/images/456
+    const { data } = await apiClient.delete(`/api/images/${imageID}`);
+    return data; // 建议也 return data，保持风格一致
+  }
 }
 
 export const imageEditorService = new ImageEditorService()
