@@ -3,10 +3,10 @@
 
 #include<torch/extension.h>
 
-int quadrilinear_forward(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
+int quadrilinear_forward_cpu(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
                       int lut_dim, int shift, float binsize, int width, int height, int batch);
 
-int quadrilinear_backward(torch::Tensor image, torch::Tensor image_grad,torch::Tensor lut, torch::Tensor lut_grad,
+int quadrilinear_backward_cpu(torch::Tensor image, torch::Tensor image_grad,torch::Tensor lut, torch::Tensor lut_grad,
                        int lut_dim, int shift, float binsize, int width, int height, int batch);
 
 #endif

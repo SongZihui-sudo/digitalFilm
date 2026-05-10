@@ -4,7 +4,7 @@ void QuadriLinearForwardCpu(const float* lut, const float* image, float* output,
 
 void QuadriLinearBackwardCpu(const float* image, float* image_grad,const float* lut, float* lut_grad, const int dim, const int shift, const float binsize, const int width, const int height, const int channels);
 
-int quadrilinear_forward(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
+int quadrilinear_forward_cpu(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
                       int lut_dim, int shift, float binsize, int width, int height, int batch)
 {
     // Grab the input tensor
@@ -21,7 +21,7 @@ int quadrilinear_forward(torch::Tensor lut, torch::Tensor image, torch::Tensor o
     return 1;
 }
 
-int quadrilinear_backward(torch::Tensor image, torch::Tensor image_grad, torch::Tensor lut, torch::Tensor lut_grad,
+int quadrilinear_backward_cpu(torch::Tensor image, torch::Tensor image_grad, torch::Tensor lut, torch::Tensor lut_grad,
                        int lut_dim, int shift, float binsize, int width, int height, int batch)
 {
     // Grab the input tensor

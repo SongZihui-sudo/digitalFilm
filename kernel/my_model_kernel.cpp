@@ -53,7 +53,7 @@ int quadrilinear4d_forward(torch::Tensor lut,
     if (image.is_cuda())
         return quadrilinear4d_forward_cuda(lut, image, output, lut_dim, shift, binsize, width, height, batch);
 #endif
-    return quadrilinear4d_forward(lut, image, output, lut_dim, shift, binsize, width, height, batch);
+    return quadrilinear_forward_cpu(lut, image, output, lut_dim, shift, binsize, width, height, batch);
 }
 
 int quadrilinear4d_backward( torch::Tensor image,
@@ -71,7 +71,7 @@ int quadrilinear4d_backward( torch::Tensor image,
     if (image.is_cuda())
         return quadrilinear4d_backward_cuda(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
 #endif
-    return quadrilinear4d_backward(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
+    return quadrilinear_backward_cpu(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
 }
 
 PYBIND11_MODULE( TORCH_EXTENSION_NAME, m )

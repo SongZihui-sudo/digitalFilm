@@ -6,8 +6,9 @@ import os
 from models.digitalFilm_v2 import digitalFilmv2
 from options.options import everyThingOptions
 
-MAX_WIDTH = 2457
-MAX_HEIGHT = 1843
+
+MAX_WIDTH = 1024
+MAX_HEIGHT = 768
 transform = transforms.Compose([
     transforms.Resize((MAX_HEIGHT, MAX_WIDTH)),
     transforms.ToTensor()
@@ -33,11 +34,6 @@ def load_model(model_path):
     return model
 
 def process_images(image, model_choice):
-    width, height = image.size
-
-    if width > MAX_WIDTH and height > MAX_HEIGHT:
-        raise gr.Error("Image too large!")
-
     image = transform(image)
     print(os.path.join("checkpoints", model_choice))
     model = load_model(os.path.join("checkpoints", model_choice))
@@ -58,7 +54,7 @@ def main():
         run_button = gr.Button("Run Model")
         run_button.click(process_images, inputs=[image_input, model_choice], outputs=image_output)
 
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
 
 if __name__ == "__main__":
     main()

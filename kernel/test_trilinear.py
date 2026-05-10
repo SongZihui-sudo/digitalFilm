@@ -1,5 +1,5 @@
 import torch
-from kernel.my_model_port import trilinear_port
+from my_model_port import trilinear_port
 
 
 B: int = 16
