@@ -1,7 +1,10 @@
 #include <trilinear_cpu.h>
-#include <trilinear_cuda.h>
 #include <quadrilinear4d.h>
+
+#ifdef WITH_CUDA
+#include <trilinear_cuda.h>
 #include <quadrilinear4d_cuda.h>
+#endif
 
 int trilinear_forward( torch::Tensor lut,
                        torch::Tensor image,
@@ -13,9 +16,11 @@ int trilinear_forward( torch::Tensor lut,
                        int height,
                        int batch )
 {
-    return lut.is_cuda( ) ?
-           trilinear_forward_cuda( lut, image, output, lut_dim, shift, binsize, width, height, batch ) :
-           trilinear_forward_cpu( lut, image, output, lut_dim, shift, binsize, width, height, batch );
+#ifdef WITH_CUDA
+    if (lut.is_cuda())
+        return trilinear_forward_cuda(lut, image, output, lut_dim, shift, binsize, width, height, batch);
+#endif
+    return trilinear_forward_cpu(lut, image, output, lut_dim, shift, binsize, width, height, batch);
 }
 
 int trilinear_backward( torch::Tensor image,
@@ -28,9 +33,11 @@ int trilinear_backward( torch::Tensor image,
                         int height,
                         int batch )
 {
-    return image.is_cuda( ) ?
-           trilinear_backward_cuda( image, image_grad, lut_grad, lut_dim, shift, binsize, width, height, batch ) :
-           trilinear_backward_cpu( image, image_grad, lut_grad, lut_dim, shift, binsize, width, height, batch );
+#ifdef WITH_CUDA
+    if (image.is_cuda())
+        return trilinear_backward_cuda(image, image_grad, lut_grad, lut_dim, shift, binsize, width, height, batch);
+#endif
+    return trilinear_backward_cpu(image, image_grad, lut_grad, lut_dim, shift, binsize, width, height, batch);
 }
 
 int quadrilinear4d_forward(torch::Tensor lut,
@@ -42,9 +49,11 @@ int quadrilinear4d_forward(torch::Tensor lut,
                            int height,
                            int batch)
 {
-    return image.is_cuda( ) ?
-           quadrilinear4d_forward_cuda( lut, image, output, lut_dim, shift, binsize, width, height, batch ) :
-           quadrilinear4d_forward( lut, image, output, lut_dim, shift, binsize, width, height, batch );
+#ifdef WITH_CUDA
+    if (image.is_cuda())
+        return quadrilinear4d_forward_cuda(lut, image, output, lut_dim, shift, binsize, width, height, batch);
+#endif
+    return quadrilinear4d_forward(lut, image, output, lut_dim, shift, binsize, width, height, batch);
 }
 
 int quadrilinear4d_backward( torch::Tensor image,
@@ -58,9 +67,11 @@ int quadrilinear4d_backward( torch::Tensor image,
                              int height,
                              int batch )
 {
-    return image.is_cuda() ?
-            quadrilinear4d_backward_cuda(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch) :
-            quadrilinear4d_backward(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
+#ifdef WITH_CUDA
+    if (image.is_cuda())
+        return quadrilinear4d_backward_cuda(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
+#endif
+    return quadrilinear4d_backward(image, image_grad, lut, lut_grad, lut_dim, shift, binsize, width, height, batch);
 }
 
 PYBIND11_MODULE( TORCH_EXTENSION_NAME, m )
