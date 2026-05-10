@@ -42,6 +42,7 @@ export const useUserStore = defineStore('user', () => {
     token.value = null
     userInfo.value = null
     localStorage.removeItem('token')
+    localStorage.removeItem('admin_token')
     // 在运行时取得 Project Store，避免在模块初始化时调用 Pinia store
     const projectStore = useProjectStore()
     // 统一使用自定义的 reset 方法清空 project store

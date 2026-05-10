@@ -9,8 +9,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// AdminMiddleware 验证 JWT 并将 userID 存入 context (管理员专用)
-// 权限校验已在 AdminLogin 中完成，中间件只验证 JWT 合法性
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
@@ -44,6 +42,12 @@ func AdminMiddleware() gin.HandlerFunc {
 		userID, ok := claims["user_id"].(string)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"ok": false, "error": "token 格式错误"})
+			return
+		}
+
+		isAdmin, ok := claims["is_admin"].(bool)
+		if !ok || !isAdmin {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"ok": false, "error": "需要管理员权限"})
 			return
 		}
 

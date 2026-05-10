@@ -44,6 +44,27 @@
       <MainPreview />
       <RightPanel />
     </div>
+
+    <!-- 确认删除项目的弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showDeleteProjectConfirm" class="modal-overlay" @click.self="showDeleteProjectConfirm = false">
+          <div class="modal-content panel-card">
+            <div class="modal-header">
+              <h3>确认删除</h3>
+              <button class="close-btn" @click="showDeleteProjectConfirm = false">✕</button>
+            </div>
+            <p class="confirm-text">确定要删除当前项目吗？此操作会级联删除项目内的所有图片和编辑数据，不可恢复。</p>
+            <div class="modal-actions">
+              <button class="secondary-btn" @click="showDeleteProjectConfirm = false">取消</button>
+              <button class="danger-btn" @click="confirmDeleteProject" :disabled="deleting">
+                {{ deleting ? '删除中...' : '确认删除' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -64,6 +85,8 @@ const { currentTheme, toggleTheme } = useTheme()
 
 const userStore = useUserStore()
 const showLoginModal = ref(false)
+const showDeleteProjectConfirm = ref(false)
+const deleting = ref(false)
 
 function openFileDialog() {
   fileInputRef.value?.click()
@@ -95,18 +118,24 @@ async function handleFileChange(event: Event) {
   }
 }
 
-async function handleDeleteProject() {
-  // 1. 拦截未登录用户
+function handleDeleteProject() {
   if (!userStore.isLoggedIn) {
     showLoginModal.value = true
     return
   }
+  showDeleteProjectConfirm.value = true
+}
 
+async function confirmDeleteProject() {
+  deleting.value = true
   try {
     await deleteProject()
+    showDeleteProjectConfirm.value = false
   } catch(error) {
     console.error('delete project failed:', error)
     alert('删除项目失败')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -236,4 +265,67 @@ const currentThemeLabel = computed(() => {
 .hidden-file-input {
   display: none;
 }
+
+/* 确认弹窗 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.close-btn:hover { color: var(--text-primary); }
+
+.confirm-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.fade-enter-active,
+.fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from,
+.fade-leave-to { opacity: 0; }
 </style>

@@ -45,8 +45,6 @@
           v-if="showCompare"
           :before-url="currentImageUrl"
           :after-url="displayImageUrl"
-          :before-image-style="previewImageStyle"
-          :after-image-style="previewImageStyle"
           class="preview-media"
         />
 
@@ -55,7 +53,6 @@
           :src="displayImageUrl"
           :alt="currentImageName"
           class="preview-image"
-          :style="previewImageStyle"
         />
       </div>
 
@@ -69,6 +66,27 @@
     </div>
 
     <LoginModal v-model:visible="showLoginModal" />
+
+    <!-- 是否删除的确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
+          <div class="modal-content panel-card">
+            <div class="modal-header">
+              <h3>确认删除</h3>
+              <button class="close-btn" @click="showDeleteConfirm = false">✕</button>
+            </div>
+            <p class="confirm-text">确定要删除图片 <strong>{{ currentImageName }}</strong> 吗？此操作不可恢复。</p>
+            <div class="modal-actions">
+              <button class="secondary-btn" @click="showDeleteConfirm = false">取消</button>
+              <button class="danger-btn" @click="confirmDeleteImage" :disabled="deleting">
+                {{ deleting ? '删除中...' : '确认删除' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </main>
 </template>
 
@@ -80,6 +98,7 @@ import BeforeAfterSlider from '@/components/editor/BeforeAfterSlider.vue'
 import { imageEditorService } from '@/services/ImageEditorService'
 import { imageApi } from '@/api/imageApi'
 import { useUserStore } from '@/stores/userStore'
+import { useImagePreview } from '@/composables/useImagePreview'
 import LoginModal from '@/components/common/LoginModal.vue'
 
 const projectStore = useProjectStore()
@@ -93,6 +112,7 @@ const loadingSettings = ref(false)
 
 const userStore = useUserStore()
 const showLoginModal = ref(false)
+const showDeleteConfirm = ref(false)
 
 const currentImage = computed(() => projectStore.currentImage)
 const currentImageId = computed(() => currentImage.value?.id || '')
@@ -100,43 +120,26 @@ const currentImageUrl = computed(() => currentImage.value?.originalUrl || '')
 const currentImageName = computed(() => currentImage.value?.name || '')
 const resultUrl = computed(() => editorStore.resultUrl)
 
-// 优先显示后端生成结果，没有则显示当前原图
-const displayImageUrl = computed(() => resultUrl.value || currentImageUrl.value)
-
-// 基础参数实时预览：前端近似模拟
-const previewImageStyle = computed(() => {
-  const basic = editorStore.basic
-
-  const brightness = clamp(1 + basic.exposure / 100, 0, 3)
-  const contrast = clamp(1 + basic.contrast / 100, 0, 3)
-  const saturate = clamp(1 + basic.saturation / 100, 0, 3)
-
-  const warmStrength = Math.max(0, basic.temperature) / 100
-  const tintRotate = basic.tint * 0.3
-
-  const highlightBoost = basic.highlights / 200
-  const shadowBoost = basic.shadows / 200
-
-  const extraBrightness = 1 + highlightBoost * 0.08 + shadowBoost * 0.12
-  const finalBrightness = clamp(brightness * extraBrightness, 0, 3)
-
-  return {
-    filter: [
-      `brightness(${finalBrightness})`,
-      `contrast(${contrast})`,
-      `saturate(${saturate})`,
-      `sepia(${warmStrength * 0.35})`,
-      `hue-rotate(${tintRotate}deg)`,
-    ].join(' '),
-    transform: 'scale(1)',
-    boxShadow: 'var(--shadow-lg)',
-    borderRadius: '14px',
-  }
+// Canvas-based real-time preview of basic adjustments on the ORIGINAL image
+const basicSettings = () => ({
+  exposure: editorStore.basic.exposure,
+  contrast: editorStore.basic.contrast,
+  highlights: editorStore.basic.highlights,
+  shadows: editorStore.basic.shadows,
+  temperature: editorStore.basic.temperature,
+  tint: editorStore.basic.tint,
+  saturation: editorStore.basic.saturation,
 })
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max)
-}
+const { previewSrc, loading: previewLoading } = useImagePreview(
+  currentImageUrl,
+  basicSettings,
+)
+
+// 有后端结果时显示结果，否则显示 Canvas 预览（无结果时回退到原图）
+const displayImageUrl = computed(() =>
+  resultUrl.value || previewSrc.value || currentImageUrl.value,
+)
 
 async function handleDeleteImage() {
   if (!userStore.isLoggedIn) {
@@ -149,14 +152,21 @@ async function handleDeleteImage() {
     return
   }
 
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteImage() {
+  const imageId = currentImage.value?.id
+  if (!imageId) return
+
   deleting.value = true
   try {
-    await imageEditorService.deleteImage(currentImage.value.id)
+    await imageEditorService.deleteImage(imageId)
     projectStore.setCurrentImage(null)
     const images = await imageApi.listProjectImages(projectStore.getCurrentProject().id)
     projectStore.setCurrentImages(images)
+    showDeleteConfirm.value = false
     alert("当前图片已删除")
-
   } catch (error) {
     console.error('delete image edit settings failed:', error)
     alert('当前图片删除失败')
@@ -381,4 +391,67 @@ watch(
   margin-top: 10px;
   line-height: 1.7;
 }
+
+/* 确认弹窗 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.close-btn:hover { color: var(--text-primary); }
+
+.confirm-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.fade-enter-active,
+.fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from,
+.fade-leave-to { opacity: 0; }
 </style>
