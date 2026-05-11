@@ -85,7 +85,7 @@ void TriLinearForwardCpu( const float* lut,
                           const float binsize,
                           const int width,
                           const int height,
-                          const int channels )
+                           const int channels )
 {
     const int output_size = height * width;
     ;
@@ -101,18 +101,32 @@ void TriLinearForwardCpu( const float* lut,
         int g_id = floor( g / binsize );
         int b_id = floor( b / binsize );
 
-        float r_d = fmod( r, binsize ) / binsize;
-        float g_d = fmod( g, binsize ) / binsize;
-        float b_d = fmod( b, binsize ) / binsize;
+        if (r_id < 0) r_id = 0;
+        if (g_id < 0) g_id = 0;
+        if (b_id < 0) b_id = 0;
+        if (r_id >= dim) r_id = dim - 1;
+        if (g_id >= dim) g_id = dim - 1;
+        if (b_id >= dim) b_id = dim - 1;
 
-        int id000 = r_id + g_id * dim + b_id * dim * dim;
-        int id100 = r_id + 1 + g_id * dim + b_id * dim * dim;
-        int id010 = r_id + ( g_id + 1 ) * dim + b_id * dim * dim;
-        int id110 = r_id + 1 + ( g_id + 1 ) * dim + b_id * dim * dim;
-        int id001 = r_id + g_id * dim + ( b_id + 1 ) * dim * dim;
-        int id101 = r_id + 1 + g_id * dim + ( b_id + 1 ) * dim * dim;
-        int id011 = r_id + ( g_id + 1 ) * dim + ( b_id + 1 ) * dim * dim;
-        int id111 = r_id + 1 + ( g_id + 1 ) * dim + ( b_id + 1 ) * dim * dim;
+        float r_d = ( r - ( float )r_id * binsize ) / binsize;
+        float g_d = ( g - ( float )g_id * binsize ) / binsize;
+        float b_d = ( b - ( float )b_id * binsize ) / binsize;
+
+        int r_id_p1 = r_id + 1;
+        int g_id_p1 = g_id + 1;
+        int b_id_p1 = b_id + 1;
+        if (r_id == dim - 1) { r_d = 0.0f; r_id_p1 = r_id; }
+        if (g_id == dim - 1) { g_d = 0.0f; g_id_p1 = g_id; }
+        if (b_id == dim - 1) { b_d = 0.0f; b_id_p1 = b_id; }
+
+        int id000 = r_id   + g_id   * dim + b_id   * dim * dim;
+        int id100 = r_id_p1 + g_id   * dim + b_id   * dim * dim;
+        int id010 = r_id   + g_id_p1 * dim + b_id   * dim * dim;
+        int id110 = r_id_p1 + g_id_p1 * dim + b_id   * dim * dim;
+        int id001 = r_id   + g_id   * dim + b_id_p1 * dim * dim;
+        int id101 = r_id_p1 + g_id   * dim + b_id_p1 * dim * dim;
+        int id011 = r_id   + g_id_p1 * dim + b_id_p1 * dim * dim;
+        int id111 = r_id_p1 + g_id_p1 * dim + b_id_p1 * dim * dim;
 
         float w000 = ( 1 - r_d ) * ( 1 - g_d ) * ( 1 - b_d );
         float w100 = r_d * ( 1 - g_d ) * ( 1 - b_d );
@@ -163,18 +177,32 @@ void TriLinearBackwardCpu( const float* image,
         int g_id = floor( g / binsize );
         int b_id = floor( b / binsize );
 
-        float r_d = fmod( r, binsize ) / binsize;
-        float g_d = fmod( g, binsize ) / binsize;
-        float b_d = fmod( b, binsize ) / binsize;
+        if (r_id < 0) r_id = 0;
+        if (g_id < 0) g_id = 0;
+        if (b_id < 0) b_id = 0;
+        if (r_id >= dim) r_id = dim - 1;
+        if (g_id >= dim) g_id = dim - 1;
+        if (b_id >= dim) b_id = dim - 1;
 
-        int id000 = r_id + g_id * dim + b_id * dim * dim;
-        int id100 = r_id + 1 + g_id * dim + b_id * dim * dim;
-        int id010 = r_id + ( g_id + 1 ) * dim + b_id * dim * dim;
-        int id110 = r_id + 1 + ( g_id + 1 ) * dim + b_id * dim * dim;
-        int id001 = r_id + g_id * dim + ( b_id + 1 ) * dim * dim;
-        int id101 = r_id + 1 + g_id * dim + ( b_id + 1 ) * dim * dim;
-        int id011 = r_id + ( g_id + 1 ) * dim + ( b_id + 1 ) * dim * dim;
-        int id111 = r_id + 1 + ( g_id + 1 ) * dim + ( b_id + 1 ) * dim * dim;
+        float r_d = ( r - ( float )r_id * binsize ) / binsize;
+        float g_d = ( g - ( float )g_id * binsize ) / binsize;
+        float b_d = ( b - ( float )b_id * binsize ) / binsize;
+
+        int r_id_p1 = r_id + 1;
+        int g_id_p1 = g_id + 1;
+        int b_id_p1 = b_id + 1;
+        if (r_id == dim - 1) { r_d = 0.0f; r_id_p1 = r_id; }
+        if (g_id == dim - 1) { g_d = 0.0f; g_id_p1 = g_id; }
+        if (b_id == dim - 1) { b_d = 0.0f; b_id_p1 = b_id; }
+
+        int id000 = r_id   + g_id   * dim + b_id   * dim * dim;
+        int id100 = r_id_p1 + g_id   * dim + b_id   * dim * dim;
+        int id010 = r_id   + g_id_p1 * dim + b_id   * dim * dim;
+        int id110 = r_id_p1 + g_id_p1 * dim + b_id   * dim * dim;
+        int id001 = r_id   + g_id   * dim + b_id_p1 * dim * dim;
+        int id101 = r_id_p1 + g_id   * dim + b_id_p1 * dim * dim;
+        int id011 = r_id   + g_id_p1 * dim + b_id_p1 * dim * dim;
+        int id111 = r_id_p1 + g_id_p1 * dim + b_id_p1 * dim * dim;
 
         float w000 = ( 1 - r_d ) * ( 1 - g_d ) * ( 1 - b_d );
         float w100 = r_d * ( 1 - g_d ) * ( 1 - b_d );

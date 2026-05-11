@@ -2,15 +2,27 @@ import gradio as gr
 import torch
 import torchvision.transforms as transforms
 import os
+import gc
+from PIL import Image
 
 from models.digitalFilm_v2 import digitalFilmv2
 from options.options import everyThingOptions
 
+torch.set_num_threads(2)
+torch.set_num_interop_threads(1)
 
-MAX_WIDTH = 1024
-MAX_HEIGHT = 768
+SCALE_RATIO = 0.6
+
+def adaptive_resize(image: Image.Image) -> Image.Image:
+    w, h = image.size
+    new_w = max(round(w * SCALE_RATIO), 32)
+    new_h = max(round(h * SCALE_RATIO), 32)
+    new_w = ((new_w + 31) // 32) * 32
+    new_h = ((new_h + 31) // 32) * 32
+    return image.resize((new_w, new_h), Image.BILINEAR)
+
 transform = transforms.Compose([
-    transforms.Resize((MAX_HEIGHT, MAX_WIDTH)),
+    transforms.Lambda(adaptive_resize),
     transforms.ToTensor()
 ])
 
@@ -33,18 +45,19 @@ def load_model(model_path):
     print("[INFO] Open model successfully!")
     return model
 
+@torch.inference_mode()
 def process_images(image, model_choice):
     image = transform(image)
     print(os.path.join("checkpoints", model_choice))
     model = load_model(os.path.join("checkpoints", model_choice))
     model.eval()
-    with torch.no_grad():
-        image = image.unsqueeze(0)
-        image = image.to(device)
-        output = model.g(image)["out"]
-        output = output.squeeze().cpu().clamp(0, 1)
-        output = transforms.ToPILImage()(output)
-        return output
+    image = image.unsqueeze(0)
+    image = image.to(device)
+    output = model.g(image)["out"]
+    output = output.squeeze().cpu().clamp(0, 1)
+    output = transforms.ToPILImage()(output)
+    gc.collect()
+    return output
     
 def main():
     with gr.Blocks(title="DigitalFilm App") as demo:
