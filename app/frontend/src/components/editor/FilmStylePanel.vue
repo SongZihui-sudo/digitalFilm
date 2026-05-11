@@ -95,8 +95,16 @@ const presetOptions = ref<PresetOption[]>([])
 // 根据胶片的 value 键值，单独配置每种胶片的图片和介绍
 const localPresetConfigs: Record<string, { image?: string; description?: string }> = {
   'kodak_gold_200': {
-    image: 'https://images.unsplash.com/photo-1616423640778-28d1b53229bd?q=80&w=200&auto=format&fit=crop', // 可替换为 kodakImg
-    description: '偏暖色调，高光带有一丝金黄，适合阳光下的街拍与人像。'
+    image: 'https://github.com/user-attachments/assets/25d75466-0378-444c-8410-ae5196e51d94', // 可替换为 kodakImg
+    description: '暖色调、色彩饱满，经典日光胶片风格'
+  },
+  "kodak_E100": {
+    image: "https://github.com/user-attachments/assets/aea8252e-033b-4633-86db-d2864f6f02a1",
+    description: "Ektachrome 反转片风格，色彩鲜艳通透、颗粒细腻"
+  },
+  "fuji_color_200": {
+    image: "https://github.com/user-attachments/assets/98c1d1f9-930c-446d-afad-0046cf4b790d",
+    description: "富士彩色负片风格，色调自然柔和、颗粒细腻，略带清新冷调"
   }
 }
 

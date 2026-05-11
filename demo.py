@@ -67,6 +67,18 @@ FILM_INFO = {
         "image": "https://github.com/user-attachments/assets/25d75466-0378-444c-8410-ae5196e51d94",
         "emoji": "🌅",
     },
+    "kodak_E100.pth": {
+        "name": "Kodak E100",
+        "desc": "Ektachrome 反转片风格，色彩鲜艳通透、颗粒细腻",
+        "image": "https://github.com/user-attachments/assets/aea8252e-033b-4633-86db-d2864f6f02a1",
+        "emoji": "🌸",
+    },
+    "fuji_color_200.pth": {
+        "name": "Fuji Color 200",
+        "desc": "富士彩色负片风格，色调自然柔和、颗粒细腻，略带清新冷调",
+        "image": "https://github.com/user-attachments/assets/98c1d1f9-930c-446d-afad-0046cf4b790d",
+        "emoji": "🌸",
+    },
 }
 
 PRETRAINED_EXCLUDE = {"resnet18", "resnet50", "vgg16", "vgg19", "inception", "dino", "alexnet"}
@@ -99,9 +111,34 @@ CARD_COLORS = [
     "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
 ]
 
-BASE_CSS = """
+HEAD_HTML = """<style>
 #model-key-input { position: absolute; left: -9999px; opacity: 0; height: 1px; width: 1px; overflow: hidden; }
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; padding: 4px; }
+</style>
+<script>
+function selectCard(key) {
+    document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector('.model-card[data-key="' + key + '"]');
+    if (card) card.classList.add('selected');
+    const h = document.getElementById('model-key-input');
+    if (h) {
+        const ta = h.querySelector('textarea') || h.querySelector('input');
+        if (ta) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            setter.call(ta, key);
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            ta.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+}
+document.addEventListener('click', function(e) {
+    const card = e.target.closest('.model-card');
+    if (!card) return;
+    const key = card.getAttribute('data-key');
+    if (key) selectCard(key);
+});
+</script>"""
+
+BASE_CSS = """.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; padding: 4px; }
 .model-card {
     border: 2px solid #e5e7eb; border-radius: 14px; overflow: hidden; cursor: pointer;
     transition: all 0.25s ease; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
@@ -129,7 +166,7 @@ def build_cards_html(selected_key=None):
         else:
             img_block = info.get("emoji", "🎞️")
         cards.append(f"""
-    <div class="model-card{sel}" data-key="{key}" onclick="selectCard('{key}')">
+    <div class="model-card{sel}" data-key="{key}">
         <div class="model-card-img" style="background:{bg}">{img_block}</div>
         <div class="model-card-body">
             <div class="model-card-name">{info["name"]}</div>
@@ -137,25 +174,7 @@ def build_cards_html(selected_key=None):
         </div>
     </div>""")
     return f"""<style>{BASE_CSS}</style>
-<div class="cards-grid">{"".join(cards)}</div>
-<script>
-function selectCard(key) {{
-    document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.model-card[data-key="${{key}}"]`);
-    if (card) card.classList.add('selected');
-    const h = document.getElementById('model-key-input');
-    if (h) {{
-        const ta = h.querySelector('textarea') || h.querySelector('input');
-        if (ta) {{
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-            setter.call(ta, key);
-            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        }}
-        const confirmBtn = document.querySelector('#model-confirm-btn button');
-        if (confirmBtn) confirmBtn.click();
-    }}
-}}
-</script>"""
+<div class="cards-grid">{"".join(cards)}</div>"""
 
 def on_confirm_model(key):
     info = ALL_MODELS.get(key, {})
@@ -168,10 +187,9 @@ def on_close_selector():
     return gr.update(visible=True), gr.update(visible=False)
 
 def main():
-    with gr.Blocks(title="DigitalFilm App", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="DigitalFilm App", theme=gr.themes.Soft(), head=HEAD_HTML) as demo:
         model_state = gr.State(DEFAULT_MODEL)
         model_key_input = gr.Textbox(value=DEFAULT_MODEL, elem_id="model-key-input", container=False, label="")
-        confirm_model_btn = gr.Button("Confirm", visible=False, elem_id="model-confirm-btn")
 
         with gr.Column(visible=True) as main_page:
             with gr.Row():
@@ -209,7 +227,7 @@ def main():
 
         select_btn.click(fn=on_open_selector, outputs=[main_page, model_page])
         close_btn.click(fn=on_close_selector, outputs=[main_page, model_page])
-        confirm_model_btn.click(
+        model_key_input.change(
             fn=on_confirm_model,
             inputs=[model_key_input],
             outputs=[model_state, cur_model_display, main_page, model_page, model_cards]

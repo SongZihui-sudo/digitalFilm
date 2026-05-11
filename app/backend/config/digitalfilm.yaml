@@ -72,3 +72,5 @@ model_config:
 
 checkpoints:
   kodak_gold_200: "D:/projects/digitalFilm/runs/20260414_222725/checkpoints/Epoch-70/kodak_gold_200.pth"
+  kodak_E100: "D:/projects/digitalFilm/checkpoints/kodak_E100.pth"
+  fuji_color_200: "D:/projects/digitalFilm/checkpoints/fuji_color_200.pth"
