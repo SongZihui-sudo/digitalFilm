@@ -12,6 +12,7 @@ torch.set_num_threads(2)
 torch.set_num_interop_threads(1)
 
 SCALE_RATIO = 0.6
+GITHUB_REPO_URL = "https://github.com/SongZihui-sudo/digitalFilm"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -173,10 +174,18 @@ def main():
         confirm_model_btn = gr.Button("Confirm", visible=False, elem_id="model-confirm-btn")
 
         with gr.Column(visible=True) as main_page:
-            gr.Markdown("""
+            with gr.Row():
+                with gr.Column(scale=4):
+                    gr.Markdown("""
 # 🎞️ DigitalFilm
 ### AI 胶片风格模拟
 """)
+                with gr.Column(scale=0, min_width=130):
+                    gr.Button(
+                        "⭐ GitHub", link=GITHUB_REPO_URL or "#",
+                        variant="secondary", size="sm",
+                        visible=bool(GITHUB_REPO_URL)
+                    )
             with gr.Row():
                 cur_model_display = gr.Textbox(
                     label="当前胶片", value=DEFAULT_NAME,
