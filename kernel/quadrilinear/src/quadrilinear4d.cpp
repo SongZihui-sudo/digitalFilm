@@ -4,7 +4,7 @@ void QuadriLinearForwardCpu(const float* lut, const float* image, float* output,
 
 void QuadriLinearBackwardCpu(const float* image, float* image_grad,const float* lut, float* lut_grad, const int dim, const int shift, const float binsize, const int width, const int height, const int channels);
 
-int quadrilinear_forward(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
+int quadrilinear_forward_cpu(torch::Tensor lut, torch::Tensor image, torch::Tensor output,
                       int lut_dim, int shift, float binsize, int width, int height, int batch)
 {
     // Grab the input tensor
@@ -21,7 +21,7 @@ int quadrilinear_forward(torch::Tensor lut, torch::Tensor image, torch::Tensor o
     return 1;
 }
 
-int quadrilinear_backward(torch::Tensor image, torch::Tensor image_grad, torch::Tensor lut, torch::Tensor lut_grad,
+int quadrilinear_backward_cpu(torch::Tensor image, torch::Tensor image_grad, torch::Tensor lut, torch::Tensor lut_grad,
                        int lut_dim, int shift, float binsize, int width, int height, int batch)
 {
     // Grab the input tensor
@@ -62,29 +62,36 @@ void QuadriLinearForwardCpu(const float* lut, const float* image, float* output,
     int r_id = floor(r / binsize);
     int g_id = floor(g / binsize);
     int b_id = floor(b / binsize);
-    int context_id = floor(context / binsize);
+    int context_id = 0;
+
+    if (r_id < 0) r_id = 0;
+    if (g_id < 0) g_id = 0;
+    if (b_id < 0) b_id = 0;
+    if (r_id >= dim) r_id = dim - 1;
+    if (g_id >= dim) g_id = dim - 1;
+    if (b_id >= dim) b_id = dim - 1;
 
     float r_d = fmod(r,binsize) / binsize;
     float g_d = fmod(g,binsize) / binsize;
     float b_d = fmod(b,binsize) / binsize;
-    float context_d = fmod(context,binsize) / binsize;
+    float context_d = context;
 
-    int id0000 = context_id + r_id * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id1000 = context_id + 1 + r_id * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0100 = context_id + (r_id + 1) * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0010 = context_id + r_id * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id0001 = context_id + r_id * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1100 = context_id + 1 + (r_id + 1) * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0110 = context_id + (r_id + 1) * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id0011 = context_id + r_id * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1010 = context_id + 1 + r_id * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id1001 = context_id + 1 + r_id * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id0101 = context_id + (r_id + 1) * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1110 = context_id + 1 + (r_id + 1) * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id1011 = context_id + 1 + r_id * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1101 = context_id + 1 + (r_id + 1) * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id0111 = context_id + (r_id + 1) * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1111 = context_id + 1 + (r_id + 1) * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
+    int id0000 = context_id * dim * dim * dim + r_id + g_id * dim + b_id * dim * dim;
+    int id1000 = (context_id + 1) * dim * dim * dim + r_id + g_id * dim + b_id * dim * dim;
+    int id0100 = context_id * dim * dim * dim + (r_id + 1) + g_id * dim + b_id * dim * dim;
+    int id0010 = context_id * dim * dim * dim + r_id + (g_id + 1) * dim + b_id * dim * dim;
+    int id0001 = context_id * dim * dim * dim + r_id + g_id * dim + (b_id + 1) * dim * dim;
+    int id1100 = (context_id + 1) * dim * dim * dim + (r_id + 1) + g_id * dim + b_id * dim * dim;
+    int id0110 = context_id * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + b_id * dim * dim;
+    int id0011 = context_id * dim * dim * dim + r_id + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1010 = (context_id + 1) * dim * dim * dim + r_id + (g_id + 1) * dim + b_id * dim * dim;
+    int id1001 = (context_id + 1) * dim * dim * dim + r_id + g_id * dim + (b_id + 1) * dim * dim;
+    int id0101 = context_id * dim * dim * dim + (r_id + 1) + g_id * dim + (b_id + 1) * dim * dim;
+    int id1110 = (context_id + 1) * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + b_id * dim * dim;
+    int id1011 = (context_id + 1) * dim * dim * dim + r_id + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1101 = (context_id + 1) * dim * dim * dim + (r_id + 1) + g_id * dim + (b_id + 1) * dim * dim;
+    int id0111 = context_id * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1111 = (context_id + 1) * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + (b_id + 1) * dim * dim;
 
 
     float w0000 = (1-context_d)*(1-r_d)*(1-g_d)*(1-b_d);
@@ -138,29 +145,36 @@ void QuadriLinearBackwardCpu(const float* image, float* image_grad, const float*
     int r_id = floor(r / binsize);
     int g_id = floor(g / binsize);
     int b_id = floor(b / binsize);
-    int context_id = floor(context / binsize);
+    int context_id = 0;
+
+    if (r_id < 0) r_id = 0;
+    if (g_id < 0) g_id = 0;
+    if (b_id < 0) b_id = 0;
+    if (r_id >= dim) r_id = dim - 1;
+    if (g_id >= dim) g_id = dim - 1;
+    if (b_id >= dim) b_id = dim - 1;
     
     float r_d = fmod(r,binsize) / binsize;
     float g_d = fmod(g,binsize) / binsize;
     float b_d = fmod(b,binsize) / binsize;
-    float context_d = fmod(context,binsize) / binsize;
+    float context_d = context;
     
-    int id0000 = context_id + r_id * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id1000 = context_id + 1 + r_id * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0100 = context_id + (r_id + 1) * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0010 = context_id + r_id * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id0001 = context_id + r_id * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1100 = context_id + 1 + (r_id + 1) * dim + g_id * dim * dim + b_id * dim * dim * dim;
-    int id0110 = context_id + (r_id + 1) * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id0011 = context_id + r_id * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1010 = context_id + 1 + r_id * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id1001 = context_id + 1 + r_id * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id0101 = context_id + (r_id + 1) * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1110 = context_id + 1 + (r_id + 1) * dim + (g_id + 1) * dim * dim + b_id * dim * dim * dim;
-    int id1011 = context_id + 1 + r_id * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1101 = context_id + 1 + (r_id + 1) * dim + g_id * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id0111 = context_id + (r_id + 1) * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
-    int id1111 = context_id + 1 + (r_id + 1) * dim + (g_id + 1) * dim * dim + (b_id + 1) * dim * dim * dim;
+    int id0000 = context_id * dim * dim * dim + r_id + g_id * dim + b_id * dim * dim;
+    int id1000 = (context_id + 1) * dim * dim * dim + r_id + g_id * dim + b_id * dim * dim;
+    int id0100 = context_id * dim * dim * dim + (r_id + 1) + g_id * dim + b_id * dim * dim;
+    int id0010 = context_id * dim * dim * dim + r_id + (g_id + 1) * dim + b_id * dim * dim;
+    int id0001 = context_id * dim * dim * dim + r_id + g_id * dim + (b_id + 1) * dim * dim;
+    int id1100 = (context_id + 1) * dim * dim * dim + (r_id + 1) + g_id * dim + b_id * dim * dim;
+    int id0110 = context_id * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + b_id * dim * dim;
+    int id0011 = context_id * dim * dim * dim + r_id + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1010 = (context_id + 1) * dim * dim * dim + r_id + (g_id + 1) * dim + b_id * dim * dim;
+    int id1001 = (context_id + 1) * dim * dim * dim + r_id + g_id * dim + (b_id + 1) * dim * dim;
+    int id0101 = context_id * dim * dim * dim + (r_id + 1) + g_id * dim + (b_id + 1) * dim * dim;
+    int id1110 = (context_id + 1) * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + b_id * dim * dim;
+    int id1011 = (context_id + 1) * dim * dim * dim + r_id + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1101 = (context_id + 1) * dim * dim * dim + (r_id + 1) + g_id * dim + (b_id + 1) * dim * dim;
+    int id0111 = context_id * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + (b_id + 1) * dim * dim;
+    int id1111 = (context_id + 1) * dim * dim * dim + (r_id + 1) + (g_id + 1) * dim + (b_id + 1) * dim * dim;
 
 
     float w0000 = (1-context_d)*(1-r_d)*(1-g_d)*(1-b_d);
@@ -215,22 +229,22 @@ void QuadriLinearBackwardCpu(const float* image, float* image_grad, const float*
     lut_grad[id1011 + shift] += w1011 * image_grad[index + width * height * 2];
     lut_grad[id1111 + shift] += w1111 * image_grad[index + width * height * 2];
 
-    lut_grad[id0000 + shift* 3] += w0000 * image_grad[index + width * height * 3];
-    lut_grad[id1000 + shift* 3] += w1000 * image_grad[index + width * height * 3];
-    lut_grad[id0100 + shift* 3] += w0100 * image_grad[index + width * height * 3];
-    lut_grad[id0010 + shift* 3] += w0010 * image_grad[index + width * height * 3];
-    lut_grad[id0001 + shift* 3] += w0001 * image_grad[index + width * height * 3];
-    lut_grad[id1100 + shift* 3] += w1100 * image_grad[index + width * height * 3];
-    lut_grad[id0110 + shift* 3] += w0110 * image_grad[index + width * height * 3];
-    lut_grad[id0011 + shift* 3] += w0011 * image_grad[index + width * height * 3];
-    lut_grad[id1010 + shift* 3] += w1010 * image_grad[index + width * height * 3];
-    lut_grad[id1001 + shift* 3] += w1001 * image_grad[index + width * height * 3];
-    lut_grad[id0101 + shift* 3] += w0101 * image_grad[index + width * height * 3];
-    lut_grad[id1110 + shift* 3] += w1110 * image_grad[index + width * height * 3];
-    lut_grad[id0111 + shift* 3] += w0111 * image_grad[index + width * height * 3];
-    lut_grad[id1101 + shift* 3] += w1101 * image_grad[index + width * height * 3];
-    lut_grad[id1011 + shift* 3] += w1011 * image_grad[index + width * height * 3];
-    lut_grad[id1111 + shift* 3] += w1111 * image_grad[index + width * height * 3];
+    lut_grad[id0000 + shift* 2] += w0000 * image_grad[index + width * height * 3];
+    lut_grad[id1000 + shift* 2] += w1000 * image_grad[index + width * height * 3];
+    lut_grad[id0100 + shift* 2] += w0100 * image_grad[index + width * height * 3];
+    lut_grad[id0010 + shift* 2] += w0010 * image_grad[index + width * height * 3];
+    lut_grad[id0001 + shift* 2] += w0001 * image_grad[index + width * height * 3];
+    lut_grad[id1100 + shift* 2] += w1100 * image_grad[index + width * height * 3];
+    lut_grad[id0110 + shift* 2] += w0110 * image_grad[index + width * height * 3];
+    lut_grad[id0011 + shift* 2] += w0011 * image_grad[index + width * height * 3];
+    lut_grad[id1010 + shift* 2] += w1010 * image_grad[index + width * height * 3];
+    lut_grad[id1001 + shift* 2] += w1001 * image_grad[index + width * height * 3];
+    lut_grad[id0101 + shift* 2] += w0101 * image_grad[index + width * height * 3];
+    lut_grad[id1110 + shift* 2] += w1110 * image_grad[index + width * height * 3];
+    lut_grad[id0111 + shift* 2] += w0111 * image_grad[index + width * height * 3];
+    lut_grad[id1101 + shift* 2] += w1101 * image_grad[index + width * height * 3];
+    lut_grad[id1011 + shift* 2] += w1011 * image_grad[index + width * height * 3];
+    lut_grad[id1111 + shift* 2] += w1111 * image_grad[index + width * height * 3];
 
 
     }

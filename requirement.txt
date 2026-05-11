@@ -1,5 +1,7 @@
+gradio
 torch
 torchvision
+requests
 tqdm
 matplotlib
 pillow

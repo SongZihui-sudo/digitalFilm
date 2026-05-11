@@ -1,5 +1,5 @@
-from kernel.my_model_port import trilinear_port
-from kernel.my_model_port import quadrilinear_port
+from . import trilinear_port
+from . import quadrilinear_port
 
 
 __all__: list[str] = [

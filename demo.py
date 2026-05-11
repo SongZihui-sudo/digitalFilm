@@ -2,14 +2,27 @@ import gradio as gr
 import torch
 import torchvision.transforms as transforms
 import os
+import gc
+from PIL import Image
 
 from models.digitalFilm_v2 import digitalFilmv2
 from options.options import everyThingOptions
 
-MAX_WIDTH = 2457
-MAX_HEIGHT = 1843
+torch.set_num_threads(2)
+torch.set_num_interop_threads(1)
+
+SCALE_RATIO = 0.6
+
+def adaptive_resize(image: Image.Image) -> Image.Image:
+    w, h = image.size
+    new_w = max(round(w * SCALE_RATIO), 32)
+    new_h = max(round(h * SCALE_RATIO), 32)
+    new_w = ((new_w + 31) // 32) * 32
+    new_h = ((new_h + 31) // 32) * 32
+    return image.resize((new_w, new_h), Image.BILINEAR)
+
 transform = transforms.Compose([
-    transforms.Resize((MAX_HEIGHT, MAX_WIDTH)),
+    transforms.Lambda(adaptive_resize),
     transforms.ToTensor()
 ])
 
@@ -32,23 +45,19 @@ def load_model(model_path):
     print("[INFO] Open model successfully!")
     return model
 
+@torch.inference_mode()
 def process_images(image, model_choice):
-    width, height = image.size
-
-    if width > MAX_WIDTH and height > MAX_HEIGHT:
-        raise gr.Error("Image too large!")
-
     image = transform(image)
     print(os.path.join("checkpoints", model_choice))
     model = load_model(os.path.join("checkpoints", model_choice))
     model.eval()
-    with torch.no_grad():
-        image = image.unsqueeze(0)
-        image = image.to(device)
-        output = model.g(image)["out"]
-        output = output.squeeze().cpu().clamp(0, 1)
-        output = transforms.ToPILImage()(output)
-        return output
+    image = image.unsqueeze(0)
+    image = image.to(device)
+    output = model.g(image)["out"]
+    output = output.squeeze().cpu().clamp(0, 1)
+    output = transforms.ToPILImage()(output)
+    gc.collect()
+    return output
     
 def main():
     with gr.Blocks(title="DigitalFilm App") as demo:
@@ -58,7 +67,7 @@ def main():
         run_button = gr.Button("Run Model")
         run_button.click(process_images, inputs=[image_input, model_choice], outputs=image_output)
 
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
 
 if __name__ == "__main__":
     main()
