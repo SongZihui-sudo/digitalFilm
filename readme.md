@@ -6,12 +6,12 @@
 
 DigitalFilm is a project dedicated to film-style simulation, comprising the following components:
 
-- **Model Training Pipeline**
-- **MCP Service**
-- **Image Editing and Film-Style Conversion Application**
-- **Main Backend / Static Assets Backend / Image Processing Service**
+- **Model Training Pipeline** - Neural network-based film style transfer
+- **MCP Service** - Model Context Protocol integration for AI applications
+- **Modern Vue 3 Web Application** - Professional photo editing interface
+- **Multi-service Backend Architecture** - Main backend, static assets backend, image processing service
 
-The project's objective is to render digital images with a film-like aesthetic using neural networks, while providing a practical and usable editing workflow.
+The project's objective is to render digital images with a film-like aesthetic using neural networks, while providing a professional and usable editing workflow.
 
 ---
 
@@ -20,6 +20,11 @@ The project's objective is to render digital images with a film-like aesthetic u
 Run the demo  
 ```bash
 python demo.py
+```
+
+Test mcp
+```bash
+npx @modelcontextprotocol/inspector --transport stdio -- python mcp_server.py
 ```
 
 ## Feature Overview
@@ -170,20 +175,233 @@ You need to manually execute SQL to set up the first administrator user.
 UPDATE users SET is_admin = 1 WHERE username = 'YourUsername';
 ```
 
-## DigitalFilm App Feature Overview
-The application currently supports:
+## DigitalFilm Web Application
 
-- Project creation
-- Image uploading
-- Viewing image lists
-- Basic editing parameter adjustments:
-- Exposure
-- Contrast
-- Highlights
-- Film-style parameter adjustments:
-- Presets
-- Grain
-- Highlight Bloom
+### Tech Stack
+- **Vue 3.4+** - Progressive JavaScript framework with Composition API
+- **TypeScript 5.4+** - Type-safe development
+- **Vite 5.2+** - Lightning-fast build tool
+- **Pinia 2.3+** - State management
+- **Vue Router 4.3+** - Official routing
+- **Axios 1.7+** - HTTP client
+
+### Architecture
+
+#### Frontend Structure (`app/frontend/`)
+```
+src/
+├── api/              # API Layer
+│   ├── adminApi.ts   # Admin management
+│   ├── client.ts     # HTTP client configuration
+│   ├── imageApi.ts   # Image operations
+│   ├── projectApi.ts # Project management
+│   └── userApi.ts    # User authentication
+├── components/       # Vue Components
+│   ├── common/       # Reusable components (LoginModal, ThemeToggle, etc.)
+│   ├── editor/       # Editing panels (BasicAdjust, FilmStyle, Export, etc.)
+│   ├── layout/       # Layout components (Sidebar, Preview, Panel)
+│   └── project/      # Project components (ThumbnailList, ProjectList)
+├── composables/      # Composition Functions
+│   ├── useAvatar.ts
+│   ├── useFilmGeneration.ts
+│   ├── useImagePreview.ts
+│   ├── useProjectManager.ts
+│   └── useTheme.ts
+├── stores/          # Pinia State Management
+│   ├── adminStore.ts
+│   ├── editorStore.ts
+│   ├── projectStore.ts
+│   ├── themeStore.ts
+│   └── userStore.ts
+├── views/           # Page Views
+│   ├── DarkroomWorkspace.vue
+│   ├── AdminDashboard.vue
+│   └── AdminLogin.vue
+└── services/        # Business Logic Services
+```
+
+### Key Features
+
+#### 1. Professional Workspace (`DarkroomWorkspace.vue`)
+- **Three-panel Layout**: Left sidebar for projects, center for preview, right for editing tools
+- **Theme System**: Support for dark/light/auto themes with smooth transitions
+- **Responsive Design**: Adapts to different screen sizes
+- **Real-time Preview**: Instant visual feedback on all adjustments
+
+#### 2. Photo Editing Capabilities
+
+**Basic Adjustments** (`BasicAdjustPanel.vue`)
+- Exposure adjustment (-100 to +100)
+- Contrast control
+- Highlights/Shadows tuning
+- Temperature/Tint adjustment
+- Saturation control
+
+**Film Style Processing** (`FilmStylePanel.vue`)
+- Multiple film presets
+- Grain effect simulation
+- Highlight bloom effects
+- Advanced color grading
+
+**Before/After Comparison** (`BeforeAfterSlider.vue`)
+- Interactive slider for instant comparison
+- Smooth transition between original and edited versions
+
+**Professional Export** (`ExportPanel.vue`)
+- Multiple format support
+- Quality control
+- Size adjustment
+- Batch export options
+
+#### 3. Project Management
+- Create/delete projects with cascading data management
+- Image upload with automatic project assignment
+- Thumbnail grid view with efficient loading
+- Project switching with state preservation
+
+#### 4. User System & Admin Dashboard
+**User Features**
+- JWT token authentication
+- Role-based access control (user/admin)
+- Login modal with form validation
+- Session persistence
+
+**Admin Dashboard** (`AdminDashboard.vue`)
+- User CRUD operations
+- Password management
+- Admin role assignment/revocation
+- User statistics display
+- Permission control
+
+#### 5. State Management System
+
+**Editor Store** (`editorStore.ts`)
+```typescript
+interface EditSettings {
+  basic: {
+    exposure: number
+    contrast: number
+    highlights: number
+    shadows: number
+    temperature: number
+    tint: number
+    saturation: number
+  }
+  film: {
+    preset: string
+    grain: number
+    bloom: number
+  }
+}
+```
+
+**Project Store** (`projectStore.ts`)
+- Current project management
+- Image list with metadata
+- Upload status tracking
+- Selection state
+
+#### 6. Theme System
+Dynamic CSS variables for seamless theme switching:
+```css
+[data-theme="dark"] {
+  --bg-app: #1a1a1a;
+  --text-primary: #ffffff;
+}
+
+[data-theme="light"] {
+  --bg-app: #ffffff;
+  --text-primary: #1a1a1a;
+}
+```
+
+### Development Workflow
+
+#### Frontend Development
+```bash
+cd app/frontend
+
+# Install dependencies
+npm install
+
+# Development server
+npm run dev
+
+# Type checking
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+#### Build Configuration
+- **Vite Config**: Optimized for Vue 3 SFCs and TypeScript
+- **TypeScript Config**: Strict mode with path aliases
+- **Production Build**: Minified, tree-shaken, optimized assets
+
+### API Integration
+
+#### HTTP Client Setup
+```typescript
+// api/client.ts
+const client = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Request interceptor for JWT
+client.interceptors.request.use(config => {
+  const token = localStorage.getItem('token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+```
+
+#### Service Integration
+- **Image Service**: Upload, processing, and retrieval
+- **Project Service**: CRUD operations for projects
+- **Admin Service**: User management and authentication
+- **File Service**: Static asset hosting and delivery
+
+### Advanced Features
+
+#### User Experience Enhancements
+- **Keyboard Shortcuts**: Efficient workflow with keyboard controls
+- **Smart Caching**: Image and settings caching for improved performance
+- **Responsive Layout**: Adapts to different screen sizes and orientations
+- **Accessibility**: WCAG compliant interface with proper ARIA labels
+- **Offline Support**: Progressive Web App capabilities for offline editing
+
+#### Development Features
+- **Hot Module Replacement**: Instant development updates
+- **TypeScript Strict Mode**: Enhanced type safety and developer experience
+- **ESLint & Prettier**: Code quality and formatting standards
+- **Component Testing**: Comprehensive test coverage
+- **Storybook**: Component documentation and development
+
+#### Performance Optimizations
+- **Code Splitting**: Lazy-loaded components and routes
+- **Tree Shaking**: Removal of unused code
+- **Image Optimization**: Efficient image loading and caching
+- **Bundle Size Optimization**: Minimal production bundle size
+- **Memory Management**: Efficient memory usage for large images
+
+### Future Roadmap
+
+#### Planned Features
+- [ ] **History System**: Undo/redo functionality for all edits
+- [ ] **Presets Management**: Save and share custom editing presets
+- [ ] **Batch Processing**: Apply edits to multiple images simultaneously
+- [ ] **Advanced Tools**: Curves, levels, and HSL adjustments
+- [ ] **Agent-driven Editing**: Intelligent image editing through AI agents and MCP integration
+- [ ] **Cloud Sync**: Cross-device project synchronization
+- [ ] **Collaboration**: Real-time collaborative editing
+- [ ] **Mobile App**: Native mobile applications
+- [ ] **Plugin System**: Extensible architecture for third-party plugins
+- [ ] **RAW Support**: Direct RAW file processing
 
 ## Model Description
 

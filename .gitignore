@@ -1,36 +1,124 @@
-__pycache__/*
-.ipynb_checkpoints/*
-models/生成器/image/*
-models/预训练/image/*
-models/转换器/image/*
-models/生成器/*
-models/预训练/*
-models/转换器/*
-app/__pycache__/*
-new_models/*
-resnet18-5c106cde.pth
-resnet50-19c8e357.pth
-output/*
-app/models/*
-digitalFilm.onnx
-print_model.ipynb
-app/build/*
-app/dist/*
-app/digitalFilm.spec
-vgg16-397923af.pth
-doc/*
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
-utils/__pycache__/*
-options/__pycache__/*
-checkpoints/*
-/models/__pycache__/*
-runs/*
-.vscode/*
-/models/kernel/build/*
-/kernel/my_model_port/__pycache__/*
-/server_data/*
-tmp
-app/backend/build/*
-app/backend/server_data/*
-app/backend/checkpoints/*
-app/backend/__pycache__/*
+# ============================================================
+# Virtual environments
+# ============================================================
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================================
+# Node.js / Frontend (app/frontend)
+# ============================================================
+node_modules/
+.vite/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.local
+
+# ============================================================
+# Build artifacts (PyInstaller, Python C-ext, Vite, etc.)
+# ============================================================
+build/
+dist/
+*.spec
+
+# ============================================================
+# Model weights & checkpoints
+# ============================================================
+checkpoints/
+runs/
+new_models/
+server_data/
+app/models/
+app/backend/checkpoints/
+app/backend/server_data/
+models/生成器/
+models/预训练/
+models/转换器/
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.safetensors
+*.bin
+
+# ============================================================
+# Kernel build (C/C++/CUDA extensions)
+# ============================================================
+kernel/build/
+kernel/*/build/
+
+# ============================================================
+# Outputs, logs & temp files
+# ============================================================
+output/
+logs/
+*.log
+tmp/
+
+# ============================================================
+# Docs (generated)
+# ============================================================
+doc/
+
+# ============================================================
+# Experiment tracking
+# ============================================================
+wandb/
+mlruns/
+events.out.tfevents.*
+
+# ============================================================
+# IDEs & editors
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OS files
+# ============================================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ============================================================
+# Environment & secrets
+# ============================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ============================================================
+# Claude Code
+# ============================================================
+.claude/worktrees/
+
+# ============================================================
+# Project-specific
+# ============================================================
+print_model.ipynb

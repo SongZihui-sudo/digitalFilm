@@ -1,7 +1,15 @@
 import torch
+import os
+import sys
 from typing import cast
 
+# 将项目根目录加入 sys.path，以便导入 kernel.my_model_port
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 from kernel.my_model_port import trilinear_port
+from kernel.my_model_port import quadrilinear_port
 
 
 def identity4d_tensor(dim, num_context_bins=2):
@@ -84,7 +92,7 @@ class CLUT4D(torch.nn.Module):
         fused_lut = fused_lut + identity_lut.unsqueeze(0)
         # Clamp to the valid range [0, 1]
         fused_lut = torch.clamp(fused_lut, 0, 1)
-        
+
         return fused_lut
 
     def forward(self, weight, identity_lut, tvmn_module=None):
@@ -131,7 +139,7 @@ class TV_4D(torch.nn.Module):
         self.weight_g = self.weight_g.to(lut.device)
         self.weight_b = self.weight_b.to(lut.device)
         self.weight_c = self.weight_c.to(lut.device)
-        
+
         # Handle batch dimension
         dif_context = lut[:, :, :-1, :, :, :] - lut[:, :, 1:, :, :, :]
         dif_r = lut[:, :, :, :, :, :-1] - lut[:, :, :, :, :, 1:]
@@ -156,17 +164,18 @@ class TV_4D(torch.nn.Module):
 
         return tv, mn
 
+
 class Generator3DLUT_identity(torch.nn.Module):
     def __init__(self, basis_lut_path: list[str], dim: int = 33):
         super().__init__()
-        
+
         if dim == 33:
             file = open(basis_lut_path[0],'r')
         elif dim == 64:
             file = open(basis_lut_path[1],'r')
         else:
             raise FileNotFoundError(f"3D LUT dimensions supported: 33, 64. Unsupported: {dim}.")
-        
+
         LUT: list[str] = file.readlines()
         self.LUT = torch.zeros(3, dim, dim, dim, dtype=torch.float)
 
@@ -178,11 +187,12 @@ class Generator3DLUT_identity(torch.nn.Module):
                     self.LUT[0, i, j, k] = float(x[0])
                     self.LUT[1, i, j, k] = float(x[1])
                     self.LUT[2, i, j, k] = float(x[2])
-                    
+
         self.LUT = torch.nn.Parameter(self.LUT.clone())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, trilinear_port.trilinearPort.apply(self.LUT, x))
+
 
 class Generator3DLUT_zero(torch.nn.Module):
     def __init__(self, dim: int = 33):
@@ -194,15 +204,17 @@ class Generator3DLUT_zero(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, trilinear_port.trilinearPort.apply(self.LUT, x))
 
+
 class Generator3DLUT_rand(torch.nn.Module):
     def __init__(self, dim: int = 33):
         super().__init__()
-        
+
         self.LUT = torch.randn(3, dim, dim, dim, dtype=torch.float) * 0.01
         self.LUT = torch.nn.Parameter(self.LUT.clone())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, trilinear_port.trilinearPort.apply(self.LUT, x))
+
 
 class TV3D(torch.nn.Module):
     def __init__(self, dim: int = 33):
@@ -210,25 +222,25 @@ class TV3D(torch.nn.Module):
 
         self.__weight_r: torch.Tensor = torch.ones(3,dim,dim,dim-1, dtype=torch.float)
         self.__weight_r[:,:,:,(0,dim-2)] *= 2.0
-        
+
         self.__weight_g: torch.Tensor = torch.ones(3,dim,dim-1,dim, dtype=torch.float)
         self.__weight_g[:,:,(0,dim-2),:] *= 2.0
-        
+
         self.__weight_b: torch.Tensor = torch.ones(3,dim-1,dim,dim, dtype=torch.float)
         self.__weight_b[:,(0,dim-2),:,:] *= 2.0
-        
+
         self.relu = torch.nn.LeakyReLU()
 
-    def forward(self, LUT: Generator3DLUT_zero | Generator3DLUT_identity) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, LUT) -> tuple[torch.Tensor, torch.Tensor]:
         lut: torch.Tensor = LUT.LUT
         self.__weight_r = self.__weight_r.to(lut.device)
         self.__weight_g = self.__weight_g.to(lut.device)
         self.__weight_b = self.__weight_b.to(lut.device)
-        
+
         dif_r: torch.Tensor = lut[:,:,:,:-1] - lut[:,:,:,1:]
         dif_g: torch.Tensor = lut[:,:,:-1,:] - lut[:,:,1:,:]
         dif_b: torch.Tensor = lut[:,:-1,:,:] - lut[:,1:,:,:]
-        
+
         tv: torch.Tensor = torch.mean(torch.mul((dif_r ** 2), self.__weight_r)) + \
                            torch.mean(torch.mul((dif_g ** 2), self.__weight_g)) + \
                            torch.mean(torch.mul((dif_b ** 2), self.__weight_b))
@@ -236,4 +248,50 @@ class TV3D(torch.nn.Module):
                            torch.mean(self.relu(dif_b))
 
         return tv, mn
-    
+
+
+class ChannelAttention(torch.nn.Module):
+    """轻量级通道注意力机制，增强对重要特征的关注"""
+
+    def __init__(self, in_channels: int = 3, reduction: int = 16):
+        super().__init__()
+        self.avg_pool = torch.nn.AdaptiveAvgPool2d(1)
+        self.fc1 = torch.nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False)
+        self.bn1 = torch.nn.BatchNorm2d(in_channels // reduction)
+        self.relu = torch.nn.ReLU(inplace=True)
+        self.fc2 = torch.nn.Conv2d(in_channels // reduction, in_channels, 1, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        b, c, _, _ = x.shape
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc1(y)
+        y = self.bn1(y)
+        y = self.relu(y)
+        y = self.fc2(y).view(b, c, 1, 1)
+
+        return torch.sigmoid(y) * x
+
+
+class SpatialModulation(torch.nn.Module):
+    """基于位置的自适应调制器，为 LUT 输出添加空间细节"""
+
+    def __init__(self, dim: int = 33):
+        super().__init__()
+        # 使用轻量级 CNN 提取空间特征
+        self.net = torch.nn.Sequential(
+            torch.nn.Conv2d(dim * 3, 64, kernel_size=1),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(64, 32, kernel_size=1),
+            torch.nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x: torch.Tensor):
+        # x shape: (B, C, H, W) - LUT 输出
+        b, c, h, w = x.shape
+
+        # 提取空间特征
+        features = self.net(x).view(b, 32, h * w)
+        scale = torch.nn.functional.softmax(features, dim=-1).view(b, h, w, 1, 1)  # (B,H,W,C=1)
+
+        return scale
+

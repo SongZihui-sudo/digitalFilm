@@ -29,7 +29,7 @@ class quadrilinearPort(torch.autograd.Function):
             x_grad.size()[0], 6, x_grad.size()[2], x_grad.size()[3]
         ).fill_(0)
         output_grad[:, 3:, :, :] = x_grad
-        lut, x, int_package, float_package = ctx.saved_variables
+        lut, x, int_package, float_package = ctx.saved_tensors
         dim, shift, W, H, batch = int_package
         dim, shift, W, H, batch = int(dim), int(shift), int(W), int(H), int(batch)
         binsize = float(float_package[0])
