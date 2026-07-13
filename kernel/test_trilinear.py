@@ -13,22 +13,22 @@ def test_trilinear(x: torch.Tensor, lut: torch.Tensor, is_cuda: bool) -> torch.T
         x = x.to("cuda:0")
         lut = lut.to("cuda:0")
 
-    return trilinear_port.trilinearPort.apply(x, lut)  # type: ignore
+    return trilinear_port.trilinearPort.apply(lut, x)  # type: ignore
 
 if __name__ == "__main__":
     '''
         test_trilinear
     '''
     x: torch.Tensor = torch.randn([B, C, H, W])
-    lut: torch.Tensor = torch.randn([B, lut_dim, lut_dim, lut_dim])
-    
+    lut: torch.Tensor = torch.randn([3, lut_dim, lut_dim, lut_dim])
+
     output = test_trilinear(x, lut, False)
     assert len(output.shape) == 4, "[Wrong] trilinear Wrong output dimension!"
     print("[pass] trilinear")
-    
+
     output = test_trilinear(x, lut, True)
     assert len(output.shape) == 4, "[Wrong] trilinear Wrong output dimension!"
     print("[pass] trilinear")
-    
+
     print("[pass] Test ok!")
     

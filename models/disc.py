@@ -1,9 +1,6 @@
 import torch
 import functools
 import numpy
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from utils.utils import get_filter, get_pad_layer
 
