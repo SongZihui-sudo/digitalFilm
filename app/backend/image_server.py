@@ -9,7 +9,7 @@ import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image, ImageEnhance
 import os
 import sys
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +22,10 @@ if PROJECT_ROOT not in sys.path:
 
 from options.options import everyThingOptions
 from models.digitalFilm_v2 import digitalFilmv2
+from models.optical_simulator import (
+    DofSettings as OpticalDofSettings,
+    OpticalSimulator,
+)
 from utils.utils import (
     ensure_dir,
     resize_to_multiple_of_16,
@@ -45,10 +49,38 @@ class BasicAdjustments(BaseModel):
     saturation: float = 0
 
 
+class DofSettings(BaseModel):
+    enabled: bool = False
+    focal_length_mm: float = 210.0
+    f_number: float = 5.6
+    focus_distance_m: float = 2.5
+    sensor_width_mm: float = 127.0
+    sensor_height_mm: float = 101.6
+    depth_min_mm: float = 500.0
+    depth_max_mm: float = 12000.0
+    psf_kernel_size: int = 65
+    num_layers: int = 8
+    render_method: str = "psf_patch"
+
+    def to_optical_settings(self) -> OpticalDofSettings:
+        return OpticalDofSettings(
+            enabled=self.enabled,
+            focal_length_mm=self.focal_length_mm,
+            f_number=self.f_number,
+            focus_distance_m=self.focus_distance_m,
+            sensor_width_mm=self.sensor_width_mm,
+            sensor_height_mm=self.sensor_height_mm,
+            depth_min_mm=self.depth_min_mm,
+            depth_max_mm=self.depth_max_mm,
+            psf_kernel_size=self.psf_kernel_size,
+            num_layers=self.num_layers,
+            render_method=self.render_method,
+        )
+
+
 class FilmStyleSettings(BaseModel):
     preset: str = "kodak_gold_200"
-    grain: int = 0
-    halation: int = 0
+    dof: DofSettings = DofSettings()
 
 
 class FilmGenerateRequest(BaseModel):
@@ -110,6 +142,25 @@ class DigitalFilmHTTPService:
         ensure_dir(self.output_dir)
 
         self.models = self.load_models()
+        # 光学模拟（Depth Anything / DefocusLens）默认在 CPU，
+        # 为 GPU 留出显存给胶片网络推理。
+        optics_config = getattr(self.app_config.opt, "optics", None)
+        optical_device = getattr(optics_config, "device", "cpu")
+        depth_model_name = getattr(
+            optics_config,
+            "depth_model_name",
+            "depth-anything/Depth-Anything-V2-Base-hf",
+        )
+        depth_model_cache_dir = getattr(optics_config, "depth_model_cache_dir", None)
+        if depth_model_cache_dir:
+            depth_model_cache_dir = os.path.expanduser(str(depth_model_cache_dir))
+            if not os.path.isabs(depth_model_cache_dir):
+                depth_model_cache_dir = os.path.join(PROJECT_ROOT, depth_model_cache_dir)
+        self.optical_simulator = OpticalSimulator(
+            device=optical_device,
+            depth_model_name=depth_model_name,
+            depth_model_cache_dir=depth_model_cache_dir,
+        )
 
         self.master_server_url = getattr(
             self.app_config.opt.global_config,
@@ -192,9 +243,21 @@ class DigitalFilmHTTPService:
             headers["Authorization"] = auth_token
         # --------------------------
 
+        # CPU 光学模拟（Depth Anything 和大画幅散焦）耗时可能明显超过
+        # 普通 Web API 默认的几十秒。生成链路本身是同步等待的，因此给内部登记
+        # 留出足够时间，避免计算已完成却因回写超时被前端误判为失败。
+        master_register_timeout = float(
+            getattr(self.app_config.opt.global_config, "master_register_timeout_seconds", 120)
+        )
+
         try:
             # 发送请求时带上 headers
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            resp = requests.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=master_register_timeout,
+            )
 
             if resp.status_code != 200:
                 raise ValueError(f"Master register result failed (Status {resp.status_code}): {resp.text}")
@@ -274,79 +337,32 @@ class DigitalFilmHTTPService:
         return image
 
     @torch.no_grad()
+    def infer_tensor(self, x: torch.Tensor, preset: str = "kodak_gold_200") -> torch.Tensor:
+        if preset not in self.models:
+            raise ValueError(
+                f"Unknown preset: {preset}. Available presets: {list(self.models.keys())}"
+            )
+
+        model = self.models[preset]
+        amp_enabled = self.device == "cuda"
+        amp_dtype = torch.float16 if amp_enabled else torch.float32
+        with torch.autocast(
+                device_type="cuda",
+                dtype=amp_dtype,
+                enabled=amp_enabled
+        ):
+            return model.g(x)["out"]
+
+    @torch.no_grad()
     def infer_pil(
             self,
             image: Image.Image,
             preset: str = "kodak_gold_200",
             max_size: int = 1536
     ) -> Image.Image:
-        if preset not in self.models:
-            raise ValueError(
-                f"Unknown preset: {preset}. Available presets: {list(self.models.keys())}"
-            )
-
-        image = image.convert("RGB")
-        image = resize_to_multiple_of_16(image, max_size=max_size)
+        image = resize_to_multiple_of_16(image.convert("RGB"), max_size=max_size)
         x = pil_to_tensor(image).to(self.device)
-
-        model = self.models[preset]
-        amp_enabled = (self.device == "cuda")
-        amp_dtype = torch.float16 if amp_enabled else torch.float32
-
-        with torch.autocast(
-                device_type="cuda",
-                dtype=amp_dtype,
-                enabled=amp_enabled
-        ):
-            out = model.g(x)
-
-        out = out["out"]
-        result = tensor_to_pil(out)
-        return result
-
-    def apply_grain(self, image: Image.Image, grain: float = 0.0) -> Image.Image:
-        grain = max(0.0, min(1.0, grain))
-        if grain <= 0:
-            return image
-
-        arr = np.array(image).astype(np.float32)
-        noise_std = 8.0 + grain * 32.0
-        noise = np.random.normal(0, noise_std, arr.shape).astype(np.float32)
-
-        luminance = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
-        luminance = luminance / 255.0
-        weight = 1.15 - 0.5 * luminance
-        weight = np.expand_dims(weight, axis=-1)
-
-        arr = arr + noise * weight
-        arr = np.clip(arr, 0, 255).astype(np.uint8)
-        return Image.fromarray(arr)
-
-    def apply_halation(self, image: Image.Image, halation: float = 0.0) -> Image.Image:
-        halation = max(0.0, min(1.0, halation))
-        if halation <= 0:
-            return image
-
-        base = image.convert("RGB")
-        arr = np.array(base).astype(np.float32)
-
-        luminance = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
-        threshold = 180 - halation * 40
-        mask = np.clip((luminance - threshold) / max(1.0, (255 - threshold)), 0, 1)
-        mask_img = Image.fromarray((mask * 255).astype(np.uint8), mode="L")
-
-        blur_radius = 6 + halation * 18
-        glow_mask = mask_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-        glow_arr = np.array(glow_mask).astype(np.float32) / 255.0
-
-        halo = np.zeros_like(arr)
-        halo[..., 0] = glow_arr * (70 + 120 * halation)
-        halo[..., 1] = glow_arr * (20 + 60 * halation)
-        halo[..., 2] = glow_arr * (10 + 30 * halation)
-
-        out = arr + halo
-        out = np.clip(out, 0, 255).astype(np.uint8)
-        return Image.fromarray(out)
+        return tensor_to_pil(self.infer_tensor(x, preset=preset))
 
     def save_image(self, image: Image.Image) -> Dict[str, Any]:
         file_name = f"{int(time.time())}_{uuid.uuid4().hex}.png"
@@ -379,14 +395,20 @@ class DigitalFilmHTTPService:
         # 3. basic 调整
         image = self.apply_basic_adjustments(image, basic)
 
-        # 4. 模型推理
-        output = self.infer_pil(image, preset=film.preset, max_size=max_size)
+        # 4. 光学模拟先在 CPU 执行，避免与胶片模型争用 GPU 显存。
+        image = resize_to_multiple_of_16(image.convert("RGB"), max_size=max_size)
+        x = pil_to_tensor(image)
+        x = self.optical_simulator.apply(
+            x,
+            dof_settings=film.dof.to_optical_settings(),
+        )
 
-        # 5. 后处理
-        output = self.apply_halation(output, halation=film.halation / 100.0)
-        output = self.apply_grain(output, grain=film.grain / 100.0)
+        # 5. 将光学处理结果传给胶片模型所在设备。
+        x = x.to(self.device)
+        output = tensor_to_pil(self.infer_tensor(x, preset=film.preset))
 
-        # 6. 保存本地结果
+        # 6. 颗粒与高光晕染已由 digitalFilm_g.FilmPipeline 的已训练模块完成。
+        # 不在这里重复叠加基于 PIL/Numpy 的效果，避免与模型效果重复。
         meta = self.save_image(output)
 
         # 7. 把结果登记到 master，拿最终 static_server URL

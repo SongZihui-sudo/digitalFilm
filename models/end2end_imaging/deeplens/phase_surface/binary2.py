@@ -1,0 +1,215 @@
+"""Binary2 phase on a plane substrate."""
+
+import torch
+
+from ..config import EPSILON
+from .phase import Phase
+
+
+class Binary2Phase(Phase):
+    """Binary2 phase on a plane substrate."""
+
+    def __init__(
+        self,
+        r,
+        d,
+        order2=0.0,
+        order4=0.0,
+        order6=0.0,
+        order8=0.0,
+        order10=0.0,
+        order12=0.0,
+        norm_radii=None,
+        mat2="air",
+        pos_xy=(0.0, 0.0),
+        vec_local=(0.0, 0.0, 1.0),
+        is_square=True,
+        device="cpu",
+    ):
+        super().__init__(
+            r=r,
+            d=d,
+            norm_radii=norm_radii,
+            mat2=mat2,
+            pos_xy=pos_xy,
+            vec_local=vec_local,
+            is_square=is_square,
+            device=device,
+        )
+
+        # Initialize polynomial coefficients
+        self.order2 = torch.tensor(order2)
+        self.order4 = torch.tensor(order4)
+        self.order6 = torch.tensor(order6)
+        self.order8 = torch.tensor(order8)
+        self.order10 = torch.tensor(order10)
+        self.order12 = torch.tensor(order12)
+
+        self.param_model = "binary2"
+        self.to(device)
+
+    @classmethod
+    def init_from_dict(cls, surf_dict):
+        """Initialize Binary2 phase surface from dictionary."""
+        mat2 = surf_dict.get("mat2", "air")
+        norm_radii = surf_dict.get("norm_radii", None)
+        is_square = surf_dict.get("is_square", True)
+        obj = cls(
+            surf_dict["r"],
+            surf_dict["d"],
+            surf_dict.get("order2", 0.0),
+            surf_dict.get("order4", 0.0),
+            surf_dict.get("order6", 0.0),
+            surf_dict.get("order8", 0.0),
+            surf_dict.get("order10", 0.0),
+            surf_dict.get("order12", 0.0),
+            norm_radii,
+            mat2,
+            is_square=is_square,
+        )
+        return obj
+
+    def phi(self, x, y):
+        """Reference phase map at design wavelength."""
+        x_norm = x / self.norm_radii
+        y_norm = y / self.norm_radii
+        r2 = x_norm * x_norm + y_norm * y_norm + EPSILON
+
+        # Horner's method: r2*(o2 + r2*(o4 + r2*(o6 + r2*(o8 + r2*(o10 + r2*o12)))))
+        phi = r2 * (
+            self.order2
+            + r2 * (self.order4 + r2 * (self.order6 + r2 * (self.order8 + r2 * (self.order10 + r2 * self.order12))))
+        )
+
+        phi = torch.remainder(phi, 2 * torch.pi)
+        return phi
+
+    def dphi_dxy(self, x, y):
+        """Calculate phase derivatives (dphi/dx, dphi/dy) for given points."""
+        x_norm = x / self.norm_radii
+        y_norm = y / self.norm_radii
+        r2 = x_norm * x_norm + y_norm * y_norm + EPSILON
+
+        # d/dr2 of polynomial, then chain rule: dphi/dx = dphi/dr2 * 2*x_norm / norm_radii
+        # Horner's: o2 + r2*(2*o4 + r2*(3*o6 + r2*(4*o8 + r2*(5*o10 + r2*6*o12))))
+        dphidr2 = (
+            self.order2
+            + r2 * (2 * self.order4 + r2 * (3 * self.order6 + r2 * (4 * self.order8 + r2 * (5 * self.order10 + r2 * 6 * self.order12))))
+        )
+        dphidx = dphidr2 * 2 * x_norm / self.norm_radii
+        dphidy = dphidr2 * 2 * y_norm / self.norm_radii
+
+        return dphidx, dphidy
+
+    def get_optimizer_params(self, lrs=[1e-4, 1e-2], optim_mat=False):
+        """Generate optimizer parameters."""
+        params = []
+
+        # Optimize position
+        self.d.requires_grad = True
+        params.append({"params": [self.d], "lr": lrs[0]})
+
+        # Optimize polynomial coefficients
+        self.order2.requires_grad = True
+        self.order4.requires_grad = True
+        self.order6.requires_grad = True
+        self.order8.requires_grad = True
+        self.order10.requires_grad = True
+        self.order12.requires_grad = True
+        params.append({"params": [self.order2], "lr": lrs[1]})
+        params.append({"params": [self.order4], "lr": lrs[1]})
+        params.append({"params": [self.order6], "lr": lrs[1]})
+        params.append({"params": [self.order8], "lr": lrs[1]})
+        params.append({"params": [self.order10], "lr": lrs[1]})
+        params.append({"params": [self.order12], "lr": lrs[1]})
+
+        # We do not optimize material parameters for phase surface.
+        assert optim_mat is False, (
+            "Material parameters are not optimized for phase surface."
+        )
+
+        return params
+
+    def save_ckpt(self, save_path="./binary2_doe.pth"):
+        """Save Binary2 DOE parameters."""
+        torch.save(
+            {
+                "param_model": self.param_model,
+                "order2": self.order2.clone().detach().cpu(),
+                "order4": self.order4.clone().detach().cpu(),
+                "order6": self.order6.clone().detach().cpu(),
+                "order8": self.order8.clone().detach().cpu(),
+                "order10": self.order10.clone().detach().cpu(),
+                "order12": self.order12.clone().detach().cpu(),
+            },
+            save_path,
+        )
+
+    def load_ckpt(self, load_path="./binary2_doe.pth"):
+        """Load Binary2 DOE parameters."""
+        ckpt = torch.load(load_path)
+        self.param_model = ckpt["param_model"]
+        self.order2 = ckpt["order2"].to(self.device)
+        self.order4 = ckpt["order4"].to(self.device)
+        self.order6 = ckpt["order6"].to(self.device)
+        self.order8 = ckpt["order8"].to(self.device)
+        self.order10 = ckpt["order10"].to(self.device)
+        self.order12 = ckpt["order12"].to(self.device)
+
+    def zmx_str(self, surf_idx, d_next):
+        """Return Zemax BINARY_2 surface string.
+
+        PARM 1–8 are set to zero (flat substrate, no aspheric sag) so that
+        Zemax interprets the XDAT entries purely as phase polynomial
+        coefficients.
+        """
+        coeffs = [
+            self.order2.item(),
+            self.order4.item(),
+            self.order6.item(),
+            self.order8.item(),
+            self.order10.item(),
+            self.order12.item(),
+        ]
+        n_terms = len(coeffs)
+
+        # Build XDAT block: term count, norm radius, then coefficients
+        xdat_str = f"    XDAT 1 {n_terms} 0 0\n"
+        xdat_str += f"    XDAT 2 {self.norm_radii} 0 0\n"
+        for j, coeff in enumerate(coeffs, start=3):
+            xdat_str += f"    XDAT {j} {coeff} 0 0\n"
+
+        zmx_str = f"""SURF {surf_idx}
+    TYPE BINARY_2
+    CURV 0.0
+    DISZ {d_next.item()}
+    DIAM {self.r} 1 0 0 1 ""
+    PARM 1 0
+    PARM 2 0
+    PARM 3 0
+    PARM 4 0
+    PARM 5 0
+    PARM 6 0
+    PARM 7 0
+    PARM 8 0
+{xdat_str}"""
+        return zmx_str
+
+    def surf_dict(self):
+        """Return surface parameters."""
+        surf_dict = {
+            "type": self.__class__.__name__,
+            "r": self.r,
+            "is_square": self.is_square,
+            "param_model": self.param_model,
+            "order2": round(self.order2.item(), 4),
+            "order4": round(self.order4.item(), 4),
+            "order6": round(self.order6.item(), 4),
+            "order8": round(self.order8.item(), 4),
+            "order10": round(self.order10.item(), 4),
+            "order12": round(self.order12.item(), 4),
+            "norm_radii": round(self.norm_radii, 4),
+            "d": round(self.d.item(), 4),
+            "mat2": self.mat2.get_name(),
+        }
+        return surf_dict

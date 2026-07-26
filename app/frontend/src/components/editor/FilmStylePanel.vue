@@ -11,20 +11,77 @@
         </button>
       </div>
 
-      <BaseSlider
-        label="颗粒"
-        v-model="editor.film.grain"
-        :min="0"
-        :max="100"
-      />
-      <BaseSlider
-        label="高光晕染"
-        v-model="editor.film.halation"
-        :min="0"
-        :max="100"
-      />
-      <button class="primary-btn" @click="handleGenerate" :disabled="loading">
-        {{ loading ? '加载预设中...' : '生成胶片效果' }}
+      <p class="model-effects-hint">
+        颗粒与高光晕染由所选 digitalFilm 模型的已训练胶片管线决定。
+      </p>
+
+      <div class="optics-settings">
+        <div class="optics-settings__section">
+          <label class="optics-settings__toggle">
+            <input v-model="editor.film.dof!.enabled" type="checkbox">
+            <span>景深模拟</span>
+          </label>
+          <template v-if="editor.film.dof?.enabled">
+            <BaseSlider
+              v-model="editor.film.dof!.focal_length_mm"
+              label="焦距（毫米）"
+              :min="50"
+              :max="300"
+              :step="1"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.f_number"
+              label="光圈值"
+              :min="1.4"
+              :max="22"
+              :step="0.1"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.focus_distance_m"
+              label="景深对焦距离（米）"
+              :min="0.2"
+              :max="100"
+              :step="0.1"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.psf_kernel_size"
+              label="散焦品质"
+              :min="33"
+              :max="129"
+              :step="32"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.num_layers"
+              label="景深精度"
+              :min="4"
+              :max="32"
+              :step="2"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.depth_min_mm"
+              label="最近深度（毫米）"
+              :min="100"
+              :max="3000"
+              :step="100"
+            />
+            <BaseSlider
+              v-model="editor.film.dof!.depth_max_mm"
+              label="最远深度（毫米）"
+              :min="2000"
+              :max="20000"
+              :step="1000"
+            />
+          </template>
+          <p class="optics-settings__hint">启用后将使用深度估计模拟前景与背景的真实散焦。</p>
+        </div>
+      </div>
+      <div v-if="editor.loading" class="generation-status" role="status" aria-live="polite">
+        <span class="generation-status__spinner" aria-hidden="true"></span>
+        <span>{{ editor.generationStage || '正在生成胶片效果…' }}</span>
+      </div>
+      <p v-if="editor.generationError" class="generation-error">{{ editor.generationError }}</p>
+      <button class="primary-btn" @click="handleGenerate" :disabled="editor.loading || loading">
+        {{ editor.loading ? '正在生成…' : (loading ? '正在加载预设…' : '生成胶片效果') }}
       </button>
     </div>
 
@@ -78,7 +135,7 @@ const editor = useEditorStore()
 const { generate, loadPresets } = useFilmGeneration()
 
 const loading = ref(false)
-const showLibrary = ref(false) 
+const showLibrary = ref(false)
 
 interface PresetOption {
   label: string;
@@ -208,7 +265,91 @@ onMounted(() => {
   border-color: #ccc;
 }
 
-/* --- 悬浮弹窗基础样式 --- */
+/* --- 生成状态 --- */
+.generation-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
+  font-size: 13px;
+}
+
+.generation-status__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(67, 56, 202, 0.25);
+  border-top-color: #4338ca;
+  border-radius: 50%;
+  animation: generation-spin 0.8s linear infinite;
+}
+
+.generation-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@keyframes generation-spin {
+  to { transform: rotate(360deg); }
+}
+
+.model-effects-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.optics-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.optics-settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.optics-settings__section + .optics-settings__section {
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.optics-settings__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.optics-settings__hint,
+.optics-settings__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.optics-settings__hint { color: #6b7280; }
+.optics-settings__error { color: #dc2626; }
+
 .library-overlay {
   position: fixed;
   top: 0;

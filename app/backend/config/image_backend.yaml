@@ -3,4 +3,13 @@ global_config:
   server_root: "./server_data"
   static_server_port: 6060
   static_server_host: "127.0.0.1"
+  # 光学模拟可能耗时较长；内部向主服务登记生成结果的等待上限（秒）。
+  master_register_timeout_seconds: 120
   master_server_url: "http://127.0.0.1:8080"
+
+# 光学计算默认固定在 CPU，避免占用胶片模型的 GPU 显存。
+# Depth Anything 模型会从 Hugging Face 下载/读取；cache 路径可改为绝对路径。
+optics:
+  device: "cpu"
+  depth_model_name: "depth-anything/Depth-Anything-V2-Base-hf"
+  depth_model_cache_dir: "checkpoints/depth_anything"

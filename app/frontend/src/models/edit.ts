@@ -8,10 +8,23 @@ export interface BasicAdjustments {
   saturation: number;
 }
 
+export interface DofSettings {
+  enabled: boolean;
+  focal_length_mm: number;
+  f_number: number;
+  focus_distance_m: number;
+  sensor_width_mm: number;
+  sensor_height_mm: number;
+  depth_min_mm: number;
+  depth_max_mm: number;
+  psf_kernel_size: number;
+  num_layers: number;
+  render_method: string;
+}
+
 export interface FilmStyleSettings {
   preset: string;
-  grain: number;
-  halation: number;
+  dof?: DofSettings;
 }
 
 export interface EditSession {

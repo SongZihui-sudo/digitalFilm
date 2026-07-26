@@ -92,6 +92,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { BasicAdjustments } from '@/models/edit'
 import { useProjectStore } from '@/stores/projectStore'
 import { useEditorStore } from '@/stores/editorStore'
 import BeforeAfterSlider from '@/components/editor/BeforeAfterSlider.vue'
@@ -120,8 +121,10 @@ const currentImageUrl = computed(() => currentImage.value?.originalUrl || '')
 const currentImageName = computed(() => currentImage.value?.name || '')
 const resultUrl = computed(() => editorStore.resultUrl)
 
-// Canvas-based real-time preview of basic adjustments on the ORIGINAL image
-const basicSettings = () => ({
+// Canvas-based real-time preview of basic adjustments. After film generation,
+// it starts from the result and applies only the adjustment delta, so sliders
+// remain responsive without re-running the expensive backend pipeline.
+const currentBasic = (): BasicAdjustments => ({
   exposure: editorStore.basic.exposure,
   contrast: editorStore.basic.contrast,
   highlights: editorStore.basic.highlights,
@@ -131,15 +134,29 @@ const basicSettings = () => ({
   saturation: editorStore.basic.saturation,
 })
 
+const previewBaseUrl = computed(() => resultUrl.value || currentImageUrl.value)
+
+const basicSettings = (): BasicAdjustments => {
+  const resultBasic = editorStore.resultBasic
+  if (!resultUrl.value || !resultBasic) return currentBasic()
+
+  return {
+    exposure: editorStore.basic.exposure - resultBasic.exposure,
+    contrast: editorStore.basic.contrast - resultBasic.contrast,
+    highlights: editorStore.basic.highlights - resultBasic.highlights,
+    shadows: editorStore.basic.shadows - resultBasic.shadows,
+    temperature: editorStore.basic.temperature - resultBasic.temperature,
+    tint: editorStore.basic.tint - resultBasic.tint,
+    saturation: editorStore.basic.saturation - resultBasic.saturation,
+  }
+}
+
 const { previewSrc, loading: previewLoading } = useImagePreview(
-  currentImageUrl,
+  previewBaseUrl,
   basicSettings,
 )
 
-// 有后端结果时显示结果，否则显示 Canvas 预览（无结果时回退到原图）
-const displayImageUrl = computed(() =>
-  resultUrl.value || previewSrc.value || currentImageUrl.value,
-)
+const displayImageUrl = computed(() => previewSrc.value || previewBaseUrl.value)
 
 async function handleDeleteImage() {
   if (!userStore.isLoggedIn) {
@@ -197,8 +214,6 @@ async function handleSaveSettings() {
       tint: editorStore.basic.tint,
       saturation: editorStore.basic.saturation,
       preset: editorStore.film?.preset ?? '',
-      grain: editorStore.film?.grain ?? 0,
-      halation: editorStore.film?.halation ?? 0,
     })
 
     alert('当前的编辑已保存')
@@ -227,8 +242,6 @@ async function loadImageSettings(imageId: string) {
 
     if (editorStore.film) {
       editorStore.film.preset = settings.preset ?? ''
-      editorStore.film.grain = settings.grain ?? 0
-      editorStore.film.halation = settings.halation ?? 0
     }
   } catch (error) {
     console.error('load image edit settings failed:', error)
@@ -244,8 +257,6 @@ async function loadImageSettings(imageId: string) {
 
     if (editorStore.film) {
       editorStore.film.preset = ''
-      editorStore.film.grain = 0
-      editorStore.film.halation = 0
     }
   } finally {
     loadingSettings.value = false
@@ -255,6 +266,8 @@ async function loadImageSettings(imageId: string) {
 watch(
   () => currentImageId.value,
   async (newImageId) => {
+    editorStore.resultUrl = ''
+    editorStore.resultBasic = null
     if (!newImageId) return
     await loadImageSettings(newImageId)
   },

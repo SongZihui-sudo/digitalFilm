@@ -6,7 +6,10 @@ interface EditorState {
   film: FilmStyleSettings;
   previewUrl: string;
   resultUrl: string;
+  resultBasic: BasicAdjustments | null;
   loading: boolean;
+  generationStage: string;
+  generationError: string;
 }
 
 export const useEditorStore = defineStore('editor', {
@@ -22,12 +25,26 @@ export const useEditorStore = defineStore('editor', {
     },
     film: {
       preset: 'kodak_gold_200',
-      grain: 0,
-      halation: 0,
+      dof: {
+        enabled: false,
+        focal_length_mm: 210,
+        f_number: 5.6,
+        focus_distance_m: 2.5,
+        sensor_width_mm: 127,
+        sensor_height_mm: 101.6,
+        depth_min_mm: 500,
+        depth_max_mm: 12000,
+        psf_kernel_size: 65,
+        num_layers: 8,
+        render_method: 'psf_patch',
+      },
     },
     previewUrl: '',
     resultUrl: '',
+    resultBasic: null,
     loading: false,
+    generationStage: '',
+    generationError: '',
   }),
 
   actions: {
@@ -42,9 +59,17 @@ export const useEditorStore = defineStore('editor', {
     },
     setResultUrl(url: string) {
       this.resultUrl = url;
+      this.resultBasic = { ...this.basic };
     },
     setLoading(v: boolean) {
       this.loading = v;
+      if (!v) this.generationStage = '';
+    },
+    setGenerationStage(stage: string) {
+      this.generationStage = stage;
+    },
+    setGenerationError(error: string) {
+      this.generationError = error;
     },
     resetEditor() {
       this.basic = {
@@ -58,10 +83,21 @@ export const useEditorStore = defineStore('editor', {
       };
       this.film = {
         preset: 'kodak_gold_200',
-        grain: 0,
-        halation: 0,
+        dof: {
+          enabled: false,
+          focal_length_mm: 210,
+          f_number: 5.6,
+          focus_distance_m: 2.5,
+          sensor_width_mm: 127,
+          sensor_height_mm: 101.6,
+          depth_min_mm: 500,
+          depth_max_mm: 12000,
+          psf_kernel_size: 129,
+          num_layers: 24,
+        },
       };
       this.resultUrl = '';
+      this.resultBasic = null;
     },
   },
 });

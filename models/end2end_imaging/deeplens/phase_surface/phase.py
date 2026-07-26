@@ -1,0 +1,431 @@
+"""Phase class: a plane substrate with phase pattern on it."""
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from ..config import EPSILON
+from ..base import DeepObj
+from ..material import Material
+
+
+class Phase(DeepObj):
+    """Base phase profile for diffractive surfaces (metasurface or DOE).
+
+    This is the base class that provides common functionality for all phase parameterizations.
+    Specific parameterizations should inherit from this class.
+
+    Reference:
+        [1] https://support.zemax.com/hc/en-us/articles/1500005489061-How-diffractive-surfaces-are-modeled-in-OpticStudio
+        [2] https://optics.ansys.com/hc/en-us/articles/360042097313-Small-Scale-Metalens-Field-Propagation
+        [3] https://optics.ansys.com/hc/en-us/articles/18254409091987-Large-Scale-Metalens-Ray-Propagation
+    """
+
+    def __init__(
+        self,
+        r,
+        d,
+        norm_radii=None,
+        mat2="air",
+        pos_xy=(0.0, 0.0),
+        vec_local=(0.0, 0.0, 1.0),
+        is_square=True,
+        device="cpu",
+    ):
+        super().__init__()
+
+        # Global direction vector, always pointing to the positive z-axis
+        self.vec_global = torch.tensor([0.0, 0.0, 1.0])
+
+        # Surface position in global coordinate system
+        self.d = torch.tensor(d)
+        self.pos_x = torch.tensor(pos_xy[0])
+        self.pos_y = torch.tensor(pos_xy[1])
+
+        # Surface direction vector in global coordinate system
+        self.vec_local = F.normalize(torch.tensor(vec_local), p=2, dim=-1)
+
+        # Material after the surface
+        self.mat2 = Material(mat2)
+
+        # DOE geometry
+        self.r = float(r)
+        self.is_square = is_square
+        self.w = self.r * float(np.sqrt(2))
+        self.h = self.r * float(np.sqrt(2))
+
+        self.diffraction_order = 1
+        self.norm_radii = self.r if norm_radii is None else norm_radii
+
+        self.device = device if device is not None else torch.device("cpu")
+        self.to(self.device)
+
+        # Pre-compute rotation matrices (depends only on static vec_local/vec_global)
+        self._cache_rotation_matrices()
+
+    def _cache_rotation_matrices(self):
+        """Pre-compute and cache rotation matrices for local/global transforms."""
+        needs_rotation = (
+            torch.abs(torch.dot(self.vec_local, self.vec_global) - 1.0) > EPSILON
+        )
+        if needs_rotation:
+            self._R_to_local = self._get_rotation_matrix(
+                self.vec_local, self.vec_global
+            )
+            self._R_to_global = self._get_rotation_matrix(
+                self.vec_global, self.vec_local
+            )
+        else:
+            self._R_to_local = None
+            self._R_to_global = None
+
+    # ==============================
+    # Abstract methods to be implemented by subclasses
+    # ==============================
+    def phi(self, x, y):
+        """Reference phase map at design wavelength. Must be implemented by subclasses."""
+        raise NotImplementedError("phi() must be implemented by subclasses")
+
+    def dphi_dxy(self, x, y):
+        """Calculate phase derivatives. Must be implemented by subclasses."""
+        raise NotImplementedError("dphi_dxy() must be implemented by subclasses")
+
+    # ==============================
+    # Computation (ray tracing)
+    # ==============================
+    def ray_reaction(self, ray, n1, n2):
+        """Ray reaction on DOE surface."""
+        ray = self.to_local_coord(ray)
+        ray = self.intersect(ray, n1)
+        ray = self.refract(ray, n1 / n2)
+        ray = self.diffract(ray, n2=n2)
+        ray = self.to_global_coord(ray)
+        return ray
+
+    def intersect(self, ray, n=1.0):
+        """Solve ray-plane intersection in local coordinate system and update ray data."""
+        # Solve intersection
+        t = (0.0 - ray.o[..., 2]) / ray.d[..., 2]
+        new_o = ray.o + t.unsqueeze(-1) * ray.d
+        if self.is_square:
+            valid = (
+                (torch.abs(new_o[..., 0]) < self.w / 2)
+                & (torch.abs(new_o[..., 1]) < self.h / 2)
+                & (ray.is_valid > 0)
+            )
+        else:
+            valid = (new_o[..., 0] ** 2 + new_o[..., 1] ** 2 < self.r**2) & (
+                ray.is_valid > 0
+            )
+
+        # Update rays
+        new_o = ray.o + ray.d * t.unsqueeze(-1)
+        ray.o = torch.where(valid.unsqueeze(-1), new_o, ray.o)
+        ray.is_valid = ray.is_valid * valid
+
+        if ray.is_coherent:
+            ray.opl = torch.where(
+                valid.unsqueeze(-1), ray.opl + n * t.unsqueeze(-1), ray.opl
+            )
+
+        return ray
+
+    def diffract(self, ray, n2=1.0):
+        """Diffraction of a phase surface.
+
+        Step 1. The phase φ in radians adds to the optical path length of the ray.
+        Step 2. The gradient of the phase profile (phase slope) changes the direction
+           of rays via the generalized Snell's law:
+           ``n₂·sin(θ₂) = n₁·sin(θ₁) + m · λ / (2π) · dφ/dx``
+
+           After standard refraction has already been applied, the remaining
+           phase deflection on the unit direction vector is:
+           ``Δl = m · λ / (2π · n₂) · dφ/dx``
+
+        Args:
+            ray: Ray object with position, direction, and wavelength.
+            n2: Refractive index of the medium after the surface. Required for
+                correct generalized Snell's law: deflection scales as 1/n₂.
+
+        Note:
+            Material dispersion is not modelled here. The phase profile ``φ(x,y)``
+            is treated as wavelength-independent; only the λ scaling in the
+            generalized Snell's law and the OPL accumulation vary with wavelength.
+            For a physical DOE whose phase profile itself changes with wavelength
+            (via ``(n(λ)-1)·h``), use ``DiffractiveSurface`` instead.
+
+        Reference:
+            [1] https://support.zemax.com/hc/en-us/articles/1500005489061-How-diffractive-surfaces-are-modeled-in-OpticStudio
+            [2] Light propagation with phase discontinuities: generalized laws of reflection and refraction. Science 2011.
+        """
+        forward = (ray.d * ray.is_valid.unsqueeze(-1))[..., 2].sum() > 0
+        valid = ray.is_valid > 0
+
+        # Step 1: DOE phase modulation
+        if ray.is_coherent:
+            phi = self.phi(ray.o[..., 0], ray.o[..., 1])
+            new_opl = ray.opl + phi.unsqueeze(-1) * (ray.wvln * 1e-3) / (2 * torch.pi)
+            ray.opl = torch.where(valid.unsqueeze(-1), new_opl, ray.opl)
+
+        # Step 2: bend rays via generalized Snell's law
+        # n₂·l₂ = n₁·l₁ + M·λ/(2π)·dφ/dx
+        # After refraction: l₂ = l_refracted + M·λ/(2π·n₂)·dφ/dx
+        dphidx, dphidy = self.dphi_dxy(ray.o[..., 0], ray.o[..., 1])
+
+        wvln_mm = ray.wvln * 1e-3
+        order = self.diffraction_order
+        phase_deflection_scale = wvln_mm / (2 * torch.pi * n2)
+        if forward:
+            new_d_x = ray.d[..., 0] + phase_deflection_scale * dphidx * order
+            new_d_y = ray.d[..., 1] + phase_deflection_scale * dphidy * order
+        else:
+            new_d_x = ray.d[..., 0] - phase_deflection_scale * dphidx * order
+            new_d_y = ray.d[..., 1] - phase_deflection_scale * dphidy * order
+
+        new_d = torch.stack([new_d_x, new_d_y, ray.d[..., 2]], dim=-1)
+        new_d = F.normalize(new_d, p=2, dim=-1)
+        ray.d = torch.where(valid.unsqueeze(-1), new_d, ray.d)
+
+        return ray
+
+    def refract(self, ray, eta):
+        """Calculate refracted ray according to Snell's law in local coordinate system.
+
+        Args:
+            ray (Ray): incident ray.
+            eta (float): ratio of indices of refraction, eta = n_i / n_t
+
+        Returns:
+            ray (Ray): refracted ray.
+        """
+        # Compute normal vectors
+        normal_vec = self.normal_vec(ray)
+
+        # Compute refraction according to Snell's law
+        dot_product = (-normal_vec * ray.d).sum(-1).unsqueeze(-1)
+        k = 1 - eta**2 * (1 - dot_product**2)
+
+        # Total internal reflection
+        valid = (k >= 0).squeeze(-1) & (ray.is_valid > 0)
+        k = k * valid.unsqueeze(-1)
+
+        # Update ray direction
+        new_d = eta * ray.d + (eta * dot_product - torch.sqrt(k + EPSILON)) * normal_vec
+        ray.d = torch.where(valid.unsqueeze(-1), new_d, ray.d)
+
+        # Update ray valid mask
+        ray.is_valid = ray.is_valid * valid
+
+        return ray
+
+    def normal_vec(self, ray):
+        """Calculate surface normal vector at intersection points.
+
+        Normal vector points from the surface toward the side where the light is coming from.
+        """
+        normal_vec = torch.zeros_like(ray.d)
+        normal_vec[..., 2] = -1
+        is_forward = ray.d[..., 2].unsqueeze(-1) > 0
+        normal_vec = torch.where(is_forward, normal_vec, -normal_vec)
+        return normal_vec
+
+    def to_local_coord(self, ray):
+        """Transform ray to local coordinate system.
+
+        Args:
+            ray (Ray): input ray in global coordinate system.
+
+        Returns:
+            ray (Ray): transformed ray in local coordinate system.
+        """
+        # Shift ray origin to surface origin
+        offset = torch.stack([self.pos_x, self.pos_y, self.d]).expand_as(ray.o)
+        ray.o = ray.o - offset
+
+        # Rotate ray origin and direction
+        if torch.abs(torch.dot(self.vec_local, self.vec_global) - 1.0) > EPSILON:
+            R = self._get_rotation_matrix(self.vec_local, self.vec_global)
+            ray.o = self._apply_rotation(ray.o, R)
+            ray.d = self._apply_rotation(ray.d, R)
+            ray.d = F.normalize(ray.d, p=2, dim=-1)
+
+        return ray
+
+    def to_global_coord(self, ray):
+        """Transform ray to global coordinate system.
+
+        Args:
+            ray (Ray): input ray in local coordinate system.
+
+        Returns:
+            ray (Ray): transformed ray in global coordinate system.
+        """
+        # Rotate ray origin and direction
+        if torch.abs(torch.dot(self.vec_local, self.vec_global) - 1.0) > EPSILON:
+            R = self._get_rotation_matrix(self.vec_global, self.vec_local)
+            ray.o = self._apply_rotation(ray.o, R)
+            ray.d = self._apply_rotation(ray.d, R)
+            ray.d = F.normalize(ray.d, p=2, dim=-1)
+
+        # Shift ray origin back to global coordinates
+        offset = torch.stack([self.pos_x, self.pos_y, self.d]).expand_as(ray.o)
+        ray.o = ray.o + offset
+
+        return ray
+
+    def _get_rotation_matrix(self, vec_from, vec_to):
+        """Calculate rotation matrix to rotate vec_from to vec_to."""
+        vec_from = F.normalize(vec_from.to(self.device), p=2, dim=-1)
+        vec_to = F.normalize(vec_to.to(self.device), p=2, dim=-1)
+
+        dot_product = torch.dot(vec_from, vec_to)
+        if torch.abs(dot_product - 1.0) < EPSILON:
+            return torch.eye(3, device=self.device)
+
+        if torch.abs(dot_product + 1.0) < EPSILON:
+            if torch.abs(vec_from[0]) < 0.9:
+                perp = torch.tensor([1.0, 0.0, 0.0], device=self.device)
+            else:
+                perp = torch.tensor([0.0, 1.0, 0.0], device=self.device)
+            axis = torch.linalg.cross(vec_from, perp)
+            axis = F.normalize(axis, p=2, dim=-1)
+            R = 2.0 * torch.outer(axis, axis) - torch.eye(3, device=self.device)
+            return R
+
+        v_cross_u = torch.linalg.cross(vec_from, vec_to)
+        cos_angle = dot_product
+
+        K = torch.tensor(
+            [
+                [0, -v_cross_u[2], v_cross_u[1]],
+                [v_cross_u[2], 0, -v_cross_u[0]],
+                [-v_cross_u[1], v_cross_u[0], 0],
+            ],
+            device=self.device,
+        )
+
+        identity = torch.eye(3, device=self.device)
+        R = identity + K + torch.mm(K, K) / (1 + cos_angle)
+
+        return R
+
+    def _apply_rotation(self, vectors, R):
+        """Apply rotation matrix to vectors."""
+        original_shape = vectors.shape
+        vectors_flat = vectors.view(-1, 3)
+        rotated_flat = torch.mm(vectors_flat, R.t())
+        return rotated_flat.view(original_shape)
+
+    # ==============================
+    # Optimization
+    # ==============================
+    def get_optimizer_params(self, lrs=[1e-4, 1e-2], optim_mat=False):
+        """Generate optimizer parameters. Must be implemented by subclasses."""
+        raise NotImplementedError(
+            "get_optimizer_params() must be implemented by subclasses"
+        )
+
+    def get_optimizer(self, lrs):
+        """Generate optimizer.
+
+        Args:
+            lrs (list or float): Learning rates for different parameters.
+        """
+        if isinstance(lrs, float):
+            lrs = [lrs]
+        params = self.get_optimizer_params(lrs)
+        optimizer = torch.optim.Adam(params)
+        return optimizer
+
+    def update_r(self, r):
+        """Update surface radius. A flat phase surface has no geometric
+        height constraint, and because the polynomial is normalized by a
+        fixed ``norm_radii``, phase coefficients do not need rescaling.
+        """
+        self.r = float(r)
+        self.w = self.r * float(np.sqrt(2))
+        self.h = self.r * float(np.sqrt(2))
+
+    def phase2height_map(self, design_wvln, refractive_idx=1.5, res=512):
+        """Convert the phase map to a physical height map for DOE fabrication.
+
+        Derived from the phase-height relation of a transmissive DOE in air:
+            φ = 2π/λ · (n−1) · h  →  h = φ · λ / (2π · (n−1))
+
+        Args:
+            design_wvln: Design wavelength [um].
+            refractive_idx: Refractive index of the DOE material at ``design_wvln``.
+            res: Pixel resolution of the returned height map (square grid).
+
+        Returns:
+            Tensor of shape ``[res, res]`` with height values in the same units
+            as ``design_wvln`` (um).
+        """
+        x, y = torch.meshgrid(
+            torch.linspace(-self.w / 2, self.w / 2, res),
+            torch.linspace(self.h / 2, -self.h / 2, res),
+            indexing="xy",
+        )
+        x, y = x.to(self.device), y.to(self.device)
+        phi = self.phi(x, y)  # [0, 2π], shape [res, res]
+        height_map = phi * design_wvln / (2 * torch.pi * (refractive_idx - 1))
+        return height_map
+
+    # =========================================
+    # Visualization
+    # =========================================
+    def draw_r(self):
+        """Effective drawing radius for 2D layout drawing."""
+        return self.r
+
+    def surface_with_offset(self, *args, **kwargs):
+        """Surface sag with offset, only used in layout drawing."""
+        return self.d
+
+    def draw_phase_map(self, save_name="./DOE_phase_map.png"):
+        """Draw phase map. Range from [0, 2*pi]."""
+        x, y = torch.meshgrid(
+            torch.linspace(-self.w / 2, self.w / 2, 2000),
+            torch.linspace(self.h / 2, -self.h / 2, 2000),
+            indexing="xy",
+        )
+        x, y = x.to(self.device), y.to(self.device)
+        pmap = self.phi(x, y)
+
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        im = ax.imshow(pmap.cpu().numpy(), vmin=0, vmax=2 * torch.pi)
+        ax.set_title("Phase map 0.55um", fontsize=10)
+        ax.grid(False)
+        fig.colorbar(im)
+        fig.savefig(save_name, dpi=600, bbox_inches="tight")
+        plt.close(fig)
+
+    def draw_widget(self, ax, color="black", linestyle="-"):
+        """Draw DOE as a two-side surface."""
+        max_offset = self.d.item() / 100
+        d = self.d.item()
+
+        # Draw DOE
+        roc = self.r * 2
+        x = np.linspace(-self.r, self.r, 128)
+        y = np.zeros_like(x)
+        r = np.sqrt(x**2 + y**2 + EPSILON)
+        sag = roc * (1 - np.sqrt(1 - r**2 / roc**2))
+        sag = max_offset - np.fmod(sag, max_offset)
+        ax.plot(d + sag, x, color="orange", linestyle=linestyle, linewidth=0.75)
+
+    # =========================================
+    # IO
+    # =========================================
+    def save_ckpt(self, save_path="./doe.pth"):
+        """Save DOE parameters. Must be implemented by subclasses."""
+        raise NotImplementedError("save_ckpt() must be implemented by subclasses")
+
+    def load_ckpt(self, load_path="./doe.pth"):
+        """Load DOE parameters. Must be implemented by subclasses."""
+        raise NotImplementedError("load_ckpt() must be implemented by subclasses")
+
+    def surf_dict(self):
+        """Return surface parameters. Must be implemented by subclasses."""
+        raise NotImplementedError("surf_dict() must be implemented by subclasses")

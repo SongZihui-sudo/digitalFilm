@@ -4,8 +4,6 @@ import { apiClient } from '@/api/client'
 export interface ImageEditSettings extends BasicAdjustments {
   imageId: string
   preset?: string
-  grain?: number
-  halation?: number
 }
 
 export class ImageEditorService {
@@ -26,8 +24,6 @@ export class ImageEditorService {
       imageId,
       ...this.createDefaultAdjustments(),
       preset: '',
-      grain: 0,
-      halation: 0,
     }
   }
 

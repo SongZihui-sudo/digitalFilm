@@ -268,7 +268,7 @@ class Grain(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
         # generate noise at downsampled resolution then upsample (cheaper, softer)
-        scale = 2
+        scale = 1
         hs, ws = H // scale, W // scale
         noise = torch.randn(B, 1, hs, ws, device=x.device, dtype=x.dtype)
         noise = self.shaper(noise)
