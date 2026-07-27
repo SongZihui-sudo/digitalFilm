@@ -39,21 +39,43 @@
       <div
         v-if="currentImageUrl"
         class="preview-canvas"
-        :class="{ 'is-fit': fitToScreen }"
+        :class="{ 'is-fit': fitToScreen, 'is-focus-picking': isFocusPicking }"
       >
-        <BeforeAfterSlider
-          v-if="showCompare"
-          :before-url="currentImageUrl"
-          :after-url="displayImageUrl"
-          class="preview-media"
-        />
+        <div class="preview-container" ref="previewContainerRef">
+          <BeforeAfterSlider
+            v-if="showCompare"
+            :before-url="currentImageUrl"
+            :after-url="displayImageUrl"
+            class="preview-media"
+          />
 
-        <img
-          v-else
-          :src="displayImageUrl"
-          :alt="currentImageName"
-          class="preview-image"
-        />
+          <img
+            v-else
+            :src="displayImageUrl"
+            :alt="currentImageName"
+            class="preview-image"
+            :style="{ cursor: isFocusPicking ? 'crosshair' : 'default' }"
+            @click="handleImageClick"
+          />
+
+          <!-- 对焦点标记 -->
+          <div
+            v-if="editorStore.film.dof?.enabled && editorStore.film.dof?.focus_point_x != null"
+            class="focus-dot"
+            :style="{
+              left: (editorStore.film.dof!.focus_point_x! * 100) + '%',
+              top: (editorStore.film.dof!.focus_point_y! * 100) + '%',
+            }"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+              <circle cx="12" cy="12" r="4" fill="none"/>
+              <line x1="12" y1="1" x2="12" y2="7"/>
+              <line x1="12" y1="17" x2="12" y2="23"/>
+              <line x1="1" y1="12" x2="7" y2="12"/>
+              <line x1="17" y1="12" x2="23" y2="12"/>
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div v-else class="main-preview__empty">
@@ -110,6 +132,23 @@ const showCompare = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const loadingSettings = ref(false)
+
+/** 当 DOF 启用且对焦点被点击时启用"拾取焦点"模式 */
+const isFocusPicking = computed(() =>
+  editorStore.film?.dof?.enabled ?? false
+)
+const previewContainerRef = ref<HTMLElement | null>(null)
+
+function handleImageClick(e: MouseEvent) {
+  if (!editorStore.film?.dof?.enabled) return
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  // 计算点击位置相对于图片的归一化坐标 (0-1)
+  const x = (e.clientX - rect.left) / rect.width
+  const y = (e.clientY - rect.top) / rect.height
+  editorStore.film.dof!.focus_point_x = Math.max(0, Math.min(1, x))
+  editorStore.film.dof!.focus_point_y = Math.max(0, Math.min(1, y))
+}
 
 const userStore = useUserStore()
 const showLoginModal = ref(false)
@@ -337,8 +376,18 @@ watch(
   overflow: auto;
 }
 
+.preview-canvas.is-focus-picking {
+  cursor: crosshair;
+}
+
 .preview-canvas.is-fit {
   overflow: hidden;
+}
+
+/* 图片容器（用于定位对焦点标记） */
+.preview-container {
+  position: relative;
+  display: inline-block;
 }
 
 .preview-image,
@@ -352,6 +401,24 @@ watch(
     filter 120ms ease,
     transform 120ms ease,
     box-shadow 120ms ease;
+}
+
+/* 对焦点标记 */
+.focus-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+.focus-dot svg {
+  opacity: 0.9;
+}
+.focus-dot circle {
+  stroke: #ffd700;
+}
+.focus-dot line {
+  stroke: #ffd700;
 }
 
 /* 适应屏幕模式 */

@@ -8,7 +8,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 from models.digitalFilm_v2 import digitalFilmv2
-from models.optical_simulator import OpticalSimulator
 from options.options import everyThingOptions
 
 torch.set_num_threads(2)
@@ -18,6 +17,12 @@ SCALE_RATIO = 0.6
 GITHUB_REPO_URL = "https://github.com/SongZihui-sudo/digitalFilm"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def load_config(options_path):
+    cur_options = everyThingOptions(str(options_path))
+    cur_options.load_config()
+    return cur_options
 
 def adaptive_resize(image: Image.Image) -> Image.Image:
     w, h = image.size
@@ -32,45 +37,9 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-APP_CONFIG_PATH = PROJECT_ROOT / "app" / "backend" / "config" / "image_backend.yaml"
-
-
-def load_config(options_path):
-    cur_options = everyThingOptions(str(options_path))
-    cur_options.load_config()
-    return cur_options
-
-
-def configured_optical_settings() -> tuple[str, str, Path | None]:
-    """Read the server-approved optical configuration from image_backend.yaml."""
-    app_config = load_config(APP_CONFIG_PATH)
-    optics = getattr(app_config.opt, "optics", None)
-    optical_device = str(getattr(optics, "device", "cpu"))
-    depth_model_name = str(
-        getattr(optics, "depth_model_name", "depth-anything/Depth-Anything-V2-Base-hf")
-    )
-    configured_cache_dir = getattr(optics, "depth_model_cache_dir", None)
-    if not configured_cache_dir:
-        return optical_device, depth_model_name, None
-    cache_dir = Path(str(configured_cache_dir)).expanduser()
-    if not cache_dir.is_absolute():
-        cache_dir = PROJECT_ROOT / cache_dir
-    return optical_device, depth_model_name, cache_dir
-
-
-OPTICAL_DEVICE, DEPTH_MODEL_NAME, DEPTH_MODEL_CACHE_DIR = configured_optical_settings()
-
-
-optical_simulator = OpticalSimulator(
-    device=OPTICAL_DEVICE,
-    depth_model_name=DEPTH_MODEL_NAME,
-    depth_model_cache_dir=str(DEPTH_MODEL_CACHE_DIR) if DEPTH_MODEL_CACHE_DIR else None,
-)
-
 
 def load_model(model_path):
-    options = load_config(PROJECT_ROOT / "options" / "digitalFilm.yaml")
+    options = load_config(Path(__file__).resolve().parent / "options" / "digitalFilm.yaml")
     model = digitalFilmv2(0, options.opt.global_config, options.opt.model_config)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model = model.to(device)
@@ -82,12 +51,10 @@ def process_images(image, model_choice):
     if image is None:
         raise gr.Error("请先上传图片。")
 
-    # 光学处理遵从 image_backend.yaml 的 optics.device（默认 CPU），
-    # 再转移到胶片模型所在设备，避免两者争用显存。
     image = transform(image).unsqueeze(0)
     image = image.to(device)
 
-    model_path = PROJECT_ROOT / "checkpoints" / model_choice
+    model_path = Path(__file__).resolve().parent / "checkpoints" / model_choice
     print(model_path)
     model = load_model(model_path)
     model.eval()
@@ -99,7 +66,7 @@ def process_images(image, model_choice):
 
 # ----- 胶片模型元数据 -----
 
-MODELS_DIR = str(PROJECT_ROOT / "checkpoints")
+MODELS_DIR = str(Path(__file__).resolve().parent / "checkpoints")
 
 FILM_INFO = {
     "kodak_gold_200.pth": {

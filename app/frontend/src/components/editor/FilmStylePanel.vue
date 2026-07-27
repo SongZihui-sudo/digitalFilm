@@ -25,7 +25,7 @@
             <BaseSlider
               v-model="editor.film.dof!.focal_length_mm"
               label="焦距（毫米）"
-              :min="50"
+              :min="24"
               :max="300"
               :step="1"
             />
@@ -36,41 +36,27 @@
               :max="22"
               :step="0.1"
             />
-            <BaseSlider
-              v-model="editor.film.dof!.focus_distance_m"
-              label="景深对焦距离（米）"
-              :min="0.2"
-              :max="100"
-              :step="0.1"
+            <BaseSelect
+              v-model="editor.film.dof!.sensor_profile"
+              label="传感器尺寸"
+              :options="sensorOptions"
             />
-            <BaseSlider
-              v-model="editor.film.dof!.psf_kernel_size"
-              label="散焦品质"
-              :min="33"
-              :max="129"
-              :step="32"
-            />
-            <BaseSlider
-              v-model="editor.film.dof!.num_layers"
-              label="景深精度"
-              :min="4"
-              :max="32"
-              :step="2"
-            />
-            <BaseSlider
-              v-model="editor.film.dof!.depth_min_mm"
-              label="最近深度（毫米）"
-              :min="100"
-              :max="3000"
-              :step="100"
-            />
-            <BaseSlider
-              v-model="editor.film.dof!.depth_max_mm"
-              label="最远深度（毫米）"
-              :min="2000"
-              :max="20000"
-              :step="1000"
-            />
+            <div class="focus-point-info">
+              <span class="focus-point-label">
+                对焦点：
+                <template v-if="editor.film.dof!.focus_point_x != null">
+                  ({{ (editor.film.dof!.focus_point_x * 100).toFixed(0) }}%,
+                   {{ (editor.film.dof!.focus_point_y! * 100).toFixed(0) }}%)
+                </template>
+                <template v-else>画面中心（默认）</template>
+              </span>
+              <button
+                v-if="editor.film.dof!.focus_point_x != null"
+                class="reset-focus-btn"
+                @click="resetFocusPoint"
+              >重置对焦</button>
+            </div>
+            <p class="optics-settings__hint">在预览图上点击即可设置对焦点。</p>
           </template>
           <p class="optics-settings__hint">启用后将使用深度估计模拟前景与背景的真实散焦。</p>
         </div>
@@ -123,10 +109,12 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import BaseSlider from '@/components/common/BaseSlider.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFilmGeneration } from '@/composables/useFilmGeneration'
 import { useUserStore } from '@/stores/userStore'
 import LoginModal from '@/components/common/LoginModal.vue'
+import { SENSOR_SIZE_LABELS, type SensorSizeProfile } from '@/models/edit'
 
 const userStore = useUserStore()
 const showLoginModal = ref(false)
@@ -211,6 +199,16 @@ function selectPreset(value: string) {
   editor.film.preset = value
   showLibrary.value = false
 }
+
+function resetFocusPoint() {
+  editor.film.dof!.focus_point_x = null
+  editor.film.dof!.focus_point_y = null
+}
+
+const sensorOptions = Object.entries(SENSOR_SIZE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 async function handleGenerate() {
   if (!userStore.isLoggedIn) {
@@ -308,6 +306,35 @@ onMounted(() => {
   color: #64748b;
   font-size: 12px;
   line-height: 1.55;
+}
+
+/* --- 对焦点信息 --- */
+.focus-point-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.focus-point-label {
+  color: #0369a1;
+}
+.reset-focus-btn {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  color: #0284c7;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reset-focus-btn:hover {
+  background: #e0f2fe;
+  border-color: #38bdf8;
 }
 
 .optics-settings {

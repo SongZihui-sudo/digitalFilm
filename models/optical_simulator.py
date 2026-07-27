@@ -3,6 +3,9 @@
 The simulator deliberately uses the lightweight ``DefocusLens`` path for
 large-format depth of field.  It does not invoke ``Camera`` because the
 pipeline already owns decoding, colour handling, and the film-look network.
+
+All optical parameters except aperture (f_number), focal length, sensor size, and focus point
+are fixed to sensible defaults for a large-format portrait/general-purpose lens.
 """
 
 from __future__ import annotations
@@ -18,19 +21,29 @@ from models.end2end_imaging.deeplens import DefocusLens
 from models.end2end_imaging.network.depth_estimator import DepthAnythingV2Estimator
 
 
+# --- Fixed optical defaults (hidden from the UI) ---
+_SENSOR_SIZE_MAP: dict[str, tuple[float, float]] = {
+    "m43":        (17.3, 13.0),
+    "aps_c":      (23.6, 15.7),
+    "full_frame": (36.0, 24.0),
+    "medium_645": (56.0, 41.5),
+    "large_8x10": (203.2, 254.0),
+}
+_DEPTH_MIN_MM: float = 100.0
+_DEPTH_MAX_MM: float = 10000.0
+_PSF_KERNEL_SIZE: int = 65
+_NUM_LAYERS: int = 16
+_RENDER_METHOD: str = "psf_patch"
+
+
 @dataclass(frozen=True)
 class DofSettings:
     enabled: bool = False
-    focal_length_mm: float = 210.0
     f_number: float = 5.6
-    focus_distance_m: float = 2.5
-    sensor_width_mm: float = 127.0
-    sensor_height_mm: float = 101.6
-    depth_min_mm: float = 500.0
-    depth_max_mm: float = 12000.0
-    psf_kernel_size: int = 65
-    num_layers: int = 32
-    render_method: str = "psf_patch"
+    focal_length_mm: float = 85.0
+    sensor_profile: str = "full_frame"
+    focus_point_x: float | None = None   # normalized 0-1
+    focus_point_y: float | None = None   # normalized 0-1
 
 
 class OpticalSimulator:
@@ -63,21 +76,20 @@ class OpticalSimulator:
 
     @staticmethod
     def _validate_dof_settings(settings: DofSettings) -> None:
-        if settings.focal_length_mm <= 0 or settings.f_number <= 0:
-            raise ValueError("focal_length_mm and f_number must be positive.")
-        if settings.focus_distance_m <= 0:
-            raise ValueError("focus_distance_m must be positive.")
-        if settings.sensor_width_mm <= 0 or settings.sensor_height_mm <= 0:
-            raise ValueError("Sensor dimensions must be positive.")
-        if settings.depth_min_mm <= 0 or settings.depth_max_mm <= settings.depth_min_mm:
-            raise ValueError("depth_max_mm must be greater than positive depth_min_mm.")
-        if settings.psf_kernel_size < 3 or settings.psf_kernel_size % 2 == 0:
-            raise ValueError("psf_kernel_size must be an odd integer of at least 3.")
-        if settings.num_layers < 2:
-            raise ValueError("num_layers must be at least 2.")
+        if settings.focal_length_mm <= 0:
+            raise ValueError("focal_length_mm must be positive.")
+        if settings.f_number <= 0:
+            raise ValueError("f_number must be positive.")
+        if settings.focus_point_x is not None and not (0 <= settings.focus_point_x <= 1):
+            raise ValueError("focus_point_x must be in [0, 1] when provided.")
+        if settings.focus_point_y is not None and not (0 <= settings.focus_point_y <= 1):
+            raise ValueError("focus_point_y must be in [0, 1] when provided.")
+        if settings.sensor_profile not in _SENSOR_SIZE_MAP:
+            raise ValueError(f"Unknown sensor_profile: {settings.sensor_profile}. "
+                             f"Must be one of {list(_SENSOR_SIZE_MAP.keys())}.")
 
-    def _get_depth_estimator(self, settings: DofSettings) -> DepthAnythingV2Estimator:
-        key = (float(settings.depth_min_mm), float(settings.depth_max_mm))
+    def _get_depth_estimator(self) -> DepthAnythingV2Estimator:
+        key = (_DEPTH_MIN_MM, _DEPTH_MAX_MM)
         if key not in self._depth_estimators:
             self._depth_estimators[key] = DepthAnythingV2Estimator(
                 model_name=self.depth_model_name,
@@ -95,36 +107,49 @@ class OpticalSimulator:
         self._validate_dof_settings(settings)
 
         _, _, height, width = x.shape
-        depth_mm = self._get_depth_estimator(settings).estimate(x)
+        depth_mm = self._get_depth_estimator().estimate(x)
 
-        # DefocusLens requires physical sensor dimensions and raster resolution
-        # to have exactly the same aspect ratio. The input image can be any
-        # landscape/portrait/cropped ratio, so preserve the configured sensor
-        # diagonal while deriving a matching virtual sensor for this image.
-        sensor_diagonal_mm = math.hypot(
-            settings.sensor_width_mm,
-            settings.sensor_height_mm,
-        )
-        resolution_diagonal_px = math.hypot(width, height)
-        sensor_size = (
-            sensor_diagonal_mm * width / resolution_diagonal_px,
-            sensor_diagonal_mm * height / resolution_diagonal_px,
-        )
+        # --- Determine focus distance from the focus point ---
+        if settings.focus_point_x is not None and settings.focus_point_y is not None:
+            # Sample the depth map at the clicked point (normalized coords).
+            px = int(round(settings.focus_point_x * (width - 1)))
+            py = int(round(settings.focus_point_y * (height - 1)))
+            px = max(0, min(width - 1, px))
+            py = max(0, min(height - 1, py))
+            focus_distance_mm = float(depth_mm[0, 0, py, px].item())
+            # Clamp to a reasonable range (avoid extreme / invalid depth values).
+            focus_distance_mm = max(_DEPTH_MIN_MM * 2, min(_DEPTH_MAX_MM * 0.95, focus_distance_mm))
+        else:
+            # Default: focus at a classic portrait distance (~2.5 m).
+            focus_distance_mm = 2500.0
+
+        # --- Build sensor from the selected profile ---
+        sensor_w, sensor_h = _SENSOR_SIZE_MAP[settings.sensor_profile]
+
+        # Step 1: init with native sensor aspect ratio.
+        # Use (sensor_w, sensor_h) as the dummy resolution so the assert
+        #   sensor_w * res_h == sensor_h * res_w
+        # reduces to sensor_w * sensor_h == sensor_h * sensor_w,
+        # which is trivially exact in floating point (commutative multiply).
         lens = DefocusLens(
             foclen=settings.focal_length_mm,
             fnum=settings.f_number,
-            sensor_size=sensor_size,
-            sensor_res=(width, height),
+            sensor_size=(sensor_w, sensor_h),
+            sensor_res=(sensor_w, sensor_h),
             device=self.device,
             dtype=x.dtype,
         )
-        lens.refocus(-settings.focus_distance_m * 1000.0)
+        # Step 2: adapt to the actual image resolution while preserving the
+        # sensor diagonal (set_sensor_res keeps r_sensor fixed).
+        lens.set_sensor_res((width, height))
+
+        lens.refocus(-focus_distance_mm)
         return lens.render_rgbd(
             x,
             depth_mm,
-            psf_ks=settings.psf_kernel_size,
-            num_layers=settings.num_layers,
-            method=settings.render_method,
+            psf_ks=_PSF_KERNEL_SIZE,
+            num_layers=_NUM_LAYERS,
+            method=_RENDER_METHOD,
         )
 
     @torch.no_grad()

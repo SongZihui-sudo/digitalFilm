@@ -51,30 +51,20 @@ class BasicAdjustments(BaseModel):
 
 class DofSettings(BaseModel):
     enabled: bool = False
-    focal_length_mm: float = 210.0
     f_number: float = 5.6
-    focus_distance_m: float = 2.5
-    sensor_width_mm: float = 127.0
-    sensor_height_mm: float = 101.6
-    depth_min_mm: float = 500.0
-    depth_max_mm: float = 12000.0
-    psf_kernel_size: int = 65
-    num_layers: int = 8
-    render_method: str = "psf_patch"
+    focal_length_mm: float = 85.0
+    sensor_profile: str = "full_frame"
+    focus_point_x: float | None = None
+    focus_point_y: float | None = None
 
     def to_optical_settings(self) -> OpticalDofSettings:
         return OpticalDofSettings(
             enabled=self.enabled,
-            focal_length_mm=self.focal_length_mm,
             f_number=self.f_number,
-            focus_distance_m=self.focus_distance_m,
-            sensor_width_mm=self.sensor_width_mm,
-            sensor_height_mm=self.sensor_height_mm,
-            depth_min_mm=self.depth_min_mm,
-            depth_max_mm=self.depth_max_mm,
-            psf_kernel_size=self.psf_kernel_size,
-            num_layers=self.num_layers,
-            render_method=self.render_method,
+            focal_length_mm=self.focal_length_mm,
+            sensor_profile=self.sensor_profile,
+            focus_point_x=self.focus_point_x,
+            focus_point_y=self.focus_point_y,
         )
 
 
