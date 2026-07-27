@@ -49,6 +49,16 @@ export interface DofSettings {
 export interface FilmStyleSettings {
   preset: string;
   dof?: DofSettings;
+  /** 是否在导出时添加胶片边框水印 */
+  frame_border?: FrameBorderSettings;
+}
+
+export interface FrameBorderSettings {
+  enabled: boolean;
+  /** 胶片预设名称 (用于水印文字) */
+  film_name: string;
+  /** 当前图片在项目中的序号 (1-based) */
+  image_index: number;
 }
 
 export interface EditSession {

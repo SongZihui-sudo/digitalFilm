@@ -15,6 +15,16 @@ The project's objective is to render digital images with a film-like aesthetic u
 
 ---
 
+## Acknowledgements
+
+This project incorporates algorithms and concepts inspired by the following open-source work:
+
+- [**LYCO6273/Phos**](https://github.com/LYCO6273/Phos) — A physically-grounded film simulation based on computational optics concepts. Key ideas integrated into DigitalFilm's differentiable pipeline:
+  - **Pyramid Bloom**: Multi-scale Gaussian pyramid halation with wavelength-dependent scattering radii (Red > Green > Blue), simulating light scattering in film emulsions.
+  - **Density-Domain Crosstalk**: Subtractive colour mixing via density-domain dye coupling (`D = -log₁₀(E)`, additive mixing, `T = 10⁻ᴰ`), accurately modelling dye absorption overlap in colour negative film.
+
+---
+
 ## Quick Start
 
 Run the demo  

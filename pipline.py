@@ -30,7 +30,7 @@ def worker(rank: int, world_size: int, options_path: str) -> tuple[everyThingOpt
     cur_options.load_config()
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    logger: perfLogger = perfLogger(f"{cur_options.opt.global_config.checkpoints_dir}/{timestamp}", f"{cur_options.opt.global_config.name}.log", cur_options.opt.global_config.log_mode) 
+    logger: perfLogger = perfLogger(f"{cur_options.opt.global_config.checkpoints_dir}/{timestamp}", f"{cur_options.opt.global_config.name}.log", cur_options.opt.global_config.log_to) 
     logger.info(f"[{timestamp}] - Task: {cur_options.opt.global_config.name}.") 
     
     if rank == 0:

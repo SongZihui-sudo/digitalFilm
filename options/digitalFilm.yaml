@@ -1,7 +1,7 @@
 global_config:
   name: "film_pipeline_fuji_color_200"
   checkpoints_dir: "./runs"
-  epoch: 300
+  epoch: 50
   save_epoch: 0
   test_per_epoch: 5
   start_epoch: 0
@@ -13,7 +13,7 @@ global_config:
   metrics: ["ssim", "psnr"]
   uri: "localhost"
   port: 6666
-  input_size: 512
+  input_size: 1024
   crop_size: 256
   mid_reso: 1.125
   pre_transform_A: ["randomcrop"]
@@ -21,7 +21,7 @@ global_config:
   fp16: 1
   mfast: 0
   num_workers: 8
-  log_mode: "tensorboard"
+  log_to: "tensorboard"
   is_train: True
   dataroot: "D:/data/filmDataset/fuji_color_200"
   beta: ["0.5_0.9", "0.5_0.9"]
@@ -29,16 +29,21 @@ global_config:
   zero: 0
   img_log_num_samples: 4
   seed: 42
-  checkpoint: ""
+  checkpoint: "runs/20260727_160811/checkpoints/Epoch-15/model.pth"
 
 model_config:
   use_checkpoint: True
 
   # ---- Film pipeline stages ----
+  # Spectral mode: "linear" (SpectralMatrix + ResidualLUT3D)
+  #                 or "density" (DensityCrosstalk, Phos-style)
+  spectral_mode: "density"
   trc_points: 32              # per-channel 1D LUT control points
-  residual_lut_dim: 17        # small 3D LUT for residual crossover
-  use_halation: True
+  residual_lut_dim: 17        # small 3D LUT for residual crossover (linear mode only)
+  density_lut_dim: 9          # density 3D LUT dimension (density mode only, 9³=729 vertices)
+  use_halation: True          # enables PyramidBloom (replaced old Halation)
   use_grain: True
+  bloom_levels: 6             # Gaussian pyramid levels for Phos bloom
 
   # ---- Discriminator ----
   ndf: 64

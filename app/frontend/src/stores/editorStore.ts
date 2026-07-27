@@ -33,6 +33,11 @@ export const useEditorStore = defineStore('editor', {
         focus_point_x: null,
         focus_point_y: null,
       },
+      frame_border: {
+        enabled: false,
+        film_name: 'Kodak Gold 200',
+        image_index: 1,
+      },
     },
     previewUrl: '',
     resultUrl: '',
@@ -85,6 +90,11 @@ export const useEditorStore = defineStore('editor', {
           sensor_profile: 'full_frame',
           focus_point_x: null,
           focus_point_y: null,
+        },
+        frame_border: {
+          enabled: false,
+          film_name: 'Kodak Gold 200',
+          image_index: 1,
         },
       };
       this.resultUrl = '';
