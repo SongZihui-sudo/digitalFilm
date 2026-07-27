@@ -1,0 +1,824 @@
+"""Base class for geometric surfaces.
+
+Surface can refract, and reflect rays. Some surfaces can also diffract rays according to a local grating approximation.
+"""
+
+import math
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from ..base import DeepObj
+from ..config import EPSILON
+from ..material import Material
+
+
+class Surface(DeepObj):
+    """Base class for all geometric optical surfaces.
+
+    A surface sits at axial position ``d`` (mm) in the global coordinate
+    system, has an aperture radius ``r`` (mm), and separates two optical
+    media.  Subclasses override :meth:`_sag` and :meth:`_dfdxy` to define
+    their shape.
+
+    Ray–surface interaction is handled by three stages, implemented in
+    :meth:`ray_reaction`:
+
+    1. **Coordinate transform** – ray is brought into the local surface frame.
+    2. **Intersection** – solved via Newton's method (:meth:`newtons_method`),
+       using a non-differentiable iteration loop followed by a single
+       differentiable Newton step to enable gradient flow.
+    3. **Refraction / reflection** – vector Snell's law (:meth:`refract`) or
+       specular reflection (:meth:`reflect`).
+
+    Attributes:
+        d (torch.Tensor): Axial position of the surface vertex [mm].
+        r (float): Aperture radius [mm].
+        mat2 (Material): Optical material on the transmission side.
+        is_square (bool): If ``True`` the aperture is square; otherwise circular.
+    """
+
+    def __init__(
+        self,
+        r,
+        d,
+        mat2,
+        pos_xy=[0.0, 0.0],
+        vec_local=[0.0, 0.0, 1.0],
+        is_square=False,
+        device="cpu",
+    ):
+        """Initialize a generic optical surface.
+
+        Args:
+            r (float): Aperture radius [mm].
+            d (float): Axial position of the surface vertex [mm].
+            mat2 (str or Material): Material on the transmission side
+                (e.g. ``"N-BK7"``, ``"air"``).
+            pos_xy (list[float], optional): Lateral offset ``[x, y]`` [mm].
+                Defaults to ``[0.0, 0.0]``.
+            vec_local (list[float], optional): Local normal direction.
+                Defaults to ``[0.0, 0.0, 1.0]`` (on-axis).
+            is_square (bool, optional): Use a square aperture.
+                Defaults to ``False``.
+            device (str, optional): Compute device. Defaults to ``"cpu"``.
+        """
+        super(Surface, self).__init__()
+
+        # Global direction vector, always pointing to the positive z-axis
+        self.vec_global = torch.tensor([0.0, 0.0, 1.0])
+
+        # Surface position in global coordinate system
+        self.d = torch.tensor(d)
+        self.pos_x = torch.tensor(pos_xy[0])
+        self.pos_y = torch.tensor(pos_xy[1])
+
+        # Surface direction vector in global coordinate system
+        self.vec_local = F.normalize(torch.tensor(vec_local), p=2, dim=-1)
+
+        # Material after the surface
+        self.mat2 = Material(mat2)
+
+        # Surface aperture radius (non-differentiable).
+        # For a square aperture, r is the circumscribed-circle radius
+        # (i.e. the half-diagonal), so the side length is r * sqrt(2).
+        self.r = float(r)
+        self.is_square = is_square
+        if is_square:
+            self.w = self.r * float(np.sqrt(2))
+            self.h = self.r * float(np.sqrt(2))
+
+        # Newton method parameters
+        self.newton_maxiter = 8  # [int], maximum number of Newton iterations
+        self.newton_convergence = 50.0 * 1e-6  # [mm], Newton method convergence threshold
+        self.newton_step_bound = 5.0  # [mm], maximum step size in each iteration
+
+        self.device = device if device is not None else torch.device("cpu")
+        self.to(self.device)
+
+        # Pre-compute rotation matrices (depends only on static vec_local/vec_global)
+        self._cache_rotation_matrices()
+
+    def _cache_rotation_matrices(self):
+        """Pre-compute and cache rotation matrices for local/global transforms.
+
+        Called once at init. The matrices depend only on vec_local and vec_global,
+        which are static after construction.
+        """
+        needs_rotation = (
+            torch.abs(torch.dot(self.vec_local, self.vec_global) - 1.0) > EPSILON
+        )
+        if needs_rotation:
+            self._R_to_local = self._get_rotation_matrix(
+                self.vec_local, self.vec_global
+            )
+            self._R_to_global = self._get_rotation_matrix(
+                self.vec_global, self.vec_local
+            )
+        else:
+            self._R_to_local = None
+            self._R_to_global = None
+
+    @classmethod
+    def init_from_dict(cls, surf_dict):
+        """Initialize surface from a dict."""
+        raise NotImplementedError(
+            f"init_from_dict() is not implemented for {cls.__name__}."
+        )
+
+    # =====================================================================
+    # Intersection, refraction, reflection between ray and surface
+    # =====================================================================
+    def ray_reaction(self, ray, n1, n2, refraction=True):
+        """Compute the output ray after intersection and refraction/reflection.
+
+        Transforms the ray to the local surface frame, solves the intersection
+        via Newton's method, applies vector Snell's law (or specular reflection),
+        then transforms back to global coordinates.
+
+        Args:
+            ray (Ray): Incident ray bundle.
+            n1 (float): Refractive index of the incident medium.
+            n2 (float): Refractive index of the transmission medium.
+            refraction (bool, optional): If ``True`` (default) refract the ray;
+                if ``False`` reflect it.
+
+        Returns:
+            Ray: Updated ray bundle after the surface interaction.
+        """
+        # Transform ray to local coordinate system
+        ray = self.to_local_coord(ray)
+
+        # Intersection
+        ray = self.intersect(ray, n1)
+
+        if refraction:
+            old_d = ray.d.clone()
+            ray = self.refract(ray, n1 / n2)
+            ray = self.bend_penalty(ray, old_d)
+        else:
+            # Reflection
+            ray = self.reflect(ray)
+
+        # Transform ray to global coordinate system
+        ray = self.to_global_coord(ray)
+
+        return ray
+
+    def intersect(self, ray, n=1.0):
+        """Solve ray-surface intersection in local coordinate system.
+
+        Args:
+            ray (Ray): input ray.
+            n (float, optional): refractive index. Defaults to 1.0.
+        """
+        # Solve ray-surface intersection time by Newton's method
+        t, valid = self.newtons_method(ray)
+
+        # Update ray
+        new_o = ray.o + ray.d * t.unsqueeze(-1)
+        ray.o = torch.where(valid.unsqueeze(-1), new_o, ray.o)
+        ray.is_valid = ray.is_valid * valid
+
+        if ray.is_coherent:
+            if t.abs().max() > 100 and torch.get_default_dtype() == torch.float32:
+                raise Exception(
+                    "Using float32 may cause precision problem for OPL calculation."
+                )
+            new_opl = ray.opl + n * t.unsqueeze(-1)
+            ray.opl = torch.where(valid.unsqueeze(-1), new_opl, ray.opl)
+
+        return ray
+
+    def newtons_method(self, ray):
+        """Solve intersection by Newton's method in local coordinate system.
+
+        Args:
+            ray (Ray): input ray.
+
+        Returns:
+            t (tensor): intersection time.
+            valid (tensor): valid mask.
+        """
+        newton_maxiter = self.newton_maxiter
+        newton_convergence = self.newton_convergence
+        newton_step_bound = self.newton_step_bound
+
+        # Ray direction components (reused across iterations)
+        dxdt, dydt, dzdt = ray.d[..., 0], ray.d[..., 1], ray.d[..., 2]
+
+        # Initial guess of t (can also use spherical surface for initial guess)
+        t = -ray.o[..., 2] / dzdt
+
+        # 1. Non-differentiable Newton's iterations to find the intersection
+        #    Run (maxiter - 1) iterations; the differentiable step below acts as
+        #    the final iteration while also enabling gradient flow.
+        with torch.no_grad():
+            for _ in range(newton_maxiter - 1):
+                new_o = ray.o + ray.d * t.unsqueeze(-1)
+                new_x, new_y = new_o[..., 0], new_o[..., 1]
+                valid = self.is_within_data_range(new_x, new_y) & (ray.is_valid > 0)
+
+                x, y = new_x * valid, new_y * valid
+                ft = self._sag(x, y) - new_o[..., 2]
+                dfdx, dfdy = self._dfdxy(x, y)
+                dfdt = dfdx * dxdt + dfdy * dydt - dzdt
+                t = t - torch.clamp(
+                    ft / (dfdt + EPSILON), -newton_step_bound, newton_step_bound
+                )
+
+        # 2. One differentiable Newton step (final iteration + gradient flow)
+        new_o = ray.o + ray.d * t.unsqueeze(-1)
+        new_x, new_y = new_o[..., 0], new_o[..., 1]
+        valid = self.is_valid(new_x, new_y) & (ray.is_valid > 0)
+
+        x, y = new_x * valid, new_y * valid
+        ft = self._sag(x, y) - new_o[..., 2]
+        dfdx, dfdy = self._dfdxy(x, y)
+        dfdt = dfdx * dxdt + dfdy * dydt - dzdt
+        t = t - torch.clamp(
+            ft / (dfdt + EPSILON), -newton_step_bound, newton_step_bound
+        )
+
+        # 3. Determine valid solutions — reuse ft and valid from the diff step
+        with torch.no_grad():
+            valid = valid & (ft.abs() < newton_convergence)
+
+        return t, valid
+
+    def refract(self, ray, eta):
+        """Calculate refracted ray according to Snell's law in local coordinate system.
+
+        Normal vector points from the surface toward the side where the light is coming from. d is already normalized if both n and ray.d are normalized.
+
+        Args:
+            ray (Ray): incident ray.
+            eta (float): ratio of indices of refraction, eta = n_i / n_t
+
+        Returns:
+            ray (Ray): refracted ray.
+
+        References:
+            [1] https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml
+            [2] https://en.wikipedia.org/wiki/Snell%27s_law, "Vector form" section.
+        """
+        # Compute normal vectors
+        normal_vec = self.normal_vec(ray)
+
+        # Compute refraction according to Snell's law, normal_vec * ray_d
+        dot_product = (-normal_vec * ray.d).sum(-1).unsqueeze(-1)
+        k = 1 - eta**2 * (1 - dot_product**2)
+
+        # Total internal reflection
+        valid = (k >= 0).squeeze(-1) & (ray.is_valid > 0)
+        k = k * valid.unsqueeze(-1)
+
+        # Update ray direction
+        new_d = eta * ray.d + (eta * dot_product - torch.sqrt(k + EPSILON)) * normal_vec
+        ray.d = torch.where(valid.unsqueeze(-1), new_d, ray.d)
+
+        # Update ray valid mask
+        ray.is_valid = ray.is_valid * valid
+
+        return ray
+
+    def bend_penalty(self, ray, old_d):
+        """Accumulate soft per-surface bend penalty onto ray.
+
+        Penalty rises smoothly once the bend angle between ``old_d`` and the
+        refracted ``ray.d`` exceeds ``bend_angle_max`` and stays near zero for
+        mild refractions.  Normalization by ``bend_scale = 1 - cos_bend_min`` keeps
+        the gradient magnitude consistent with the CRA loss in optim.py.
+
+        Args:
+            ray (Ray): ray after refraction (ray.d is the new direction).
+            old_d (Tensor): pre-refraction ray directions, same shape as ray.d.
+
+        Returns:
+            Ray: ray with updated bend_penalty.
+        """
+        bend_angle_max = getattr(self, "bend_angle_max", 30.0)
+        cos_bend_min = math.cos(math.radians(bend_angle_max))
+        bend_scale = 1.0 - cos_bend_min
+        cos_bend = torch.sum(ray.d * old_d, dim=-1).unsqueeze(-1)
+        per_surf_penalty = F.relu((cos_bend_min - cos_bend) / bend_scale)
+        valid = ray.is_valid > 0
+        ray.bend_penalty = ray.bend_penalty + per_surf_penalty * valid.unsqueeze(-1).float()
+        return ray
+
+    def reflect(self, ray):
+        """Calculate reflected ray in local coordinate system.
+
+        Normal vector points from the surface toward the side where the light is coming from.
+
+        Args:
+            ray (Ray): incident ray.
+
+        Returns:
+            ray (Ray): reflected ray.
+
+        References:
+            [1] https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml
+            [2] https://en.wikipedia.org/wiki/Snell%27s_law, "Vector form" section.
+        """
+        # Compute surface normal vectors
+        normal_vec = self.normal_vec(ray)
+
+        # Reflect
+        dot_product = (normal_vec * ray.d).sum(-1).unsqueeze(-1)
+        new_d = ray.d - 2 * dot_product * normal_vec
+        new_d = F.normalize(new_d, p=2, dim=-1)
+
+        # Update valid rays
+        valid_mask = ray.is_valid > 0
+        ray.d = torch.where(valid_mask.unsqueeze(-1), new_d, ray.d)
+
+        return ray
+
+    def normal_vec(self, ray):
+        """Calculate surface normal vector at the intersection point in local coordinate system.
+
+        Normal vector points from the surface toward the side where the light is coming from.
+
+        Args:
+            ray (Ray): input ray.
+
+        Returns:
+            n_vec (tensor): surface normal vector.
+        """
+        x, y = ray.o[..., 0], ray.o[..., 1]
+        nx, ny, nz = self.dfdxyz(x, y)
+        n_vec = torch.stack((nx, ny, nz), axis=-1)
+        n_vec = F.normalize(n_vec, p=2, dim=-1)
+
+        is_forward = ray.d[..., 2].unsqueeze(-1) > 0
+        n_vec = torch.where(is_forward, n_vec, -n_vec)
+        return n_vec
+
+    def to_local_coord(self, ray):
+        """Transform ray to local coordinate system.
+
+        Args:
+            ray (Ray): input ray in global coordinate system.
+
+        Returns:
+            ray (Ray): transformed ray in local coordinate system.
+        """
+        # Shift ray origin to surface origin
+        offset = torch.stack([self.pos_x, self.pos_y, self.d]).expand_as(ray.o)
+        ray.o = ray.o - offset
+
+        # Rotate ray origin and direction
+        if self._R_to_local is not None:
+            ray.o = self._apply_rotation(ray.o, self._R_to_local)
+            ray.d = self._apply_rotation(ray.d, self._R_to_local)
+            ray.d = F.normalize(ray.d, p=2, dim=-1)
+
+        return ray
+
+    def to_global_coord(self, ray):
+        """Transform ray to global coordinate system.
+
+        Args:
+            ray (Ray): input ray in local coordinate system.
+
+        Returns:
+            ray (Ray): transformed ray in global coordinate system.
+        """
+        # Rotate ray origin and direction
+        if self._R_to_global is not None:
+            ray.o = self._apply_rotation(ray.o, self._R_to_global)
+            ray.d = self._apply_rotation(ray.d, self._R_to_global)
+            ray.d = F.normalize(ray.d, p=2, dim=-1)
+
+        # Shift ray origin back to global coordinates
+        offset = torch.stack([self.pos_x, self.pos_y, self.d]).expand_as(ray.o)
+        ray.o = ray.o + offset
+
+        return ray
+
+    def _get_rotation_matrix(self, vec_from, vec_to):
+        """Calculate rotation matrix to rotate vec_from to vec_to.
+
+        Args:
+            vec_from (tensor): source direction vector [3]
+            vec_to (tensor): target direction vector [3]
+
+        Returns:
+            R (tensor): rotation matrix [3, 3]
+        """
+        # CRITICAL: Normalize input vectors
+        vec_from = F.normalize(vec_from.to(self.device), p=2, dim=-1)
+        vec_to = F.normalize(vec_to.to(self.device), p=2, dim=-1)
+
+        # Check if vectors are already aligned
+        dot_product = torch.dot(vec_from, vec_to)
+        if torch.abs(dot_product - 1.0) < EPSILON:
+            # Vectors are already aligned, return identity matrix
+            return torch.eye(3, device=self.device)
+
+        if torch.abs(dot_product + 1.0) < EPSILON:
+            # Vectors are opposite, need 180-degree rotation
+            # Find a perpendicular vector
+            if torch.abs(vec_from[0]) < 0.9:
+                perp = torch.tensor([1.0, 0.0, 0.0], device=self.device)
+            else:
+                perp = torch.tensor([0.0, 1.0, 0.0], device=self.device)
+
+            # Get rotation axis by cross product
+            axis = torch.linalg.cross(vec_from, perp)
+            axis = F.normalize(axis, p=2, dim=-1)
+
+            # 180-degree rotation matrix
+            R = 2.0 * torch.outer(axis, axis) - torch.eye(3, device=self.device)
+            return R
+
+        # General case: use Rodrigues' rotation formula
+        # For normalized vectors: v × u = sin(θ) * k (where k is unit rotation axis)
+        # and v · u = cos(θ)
+        v_cross_u = torch.linalg.cross(vec_from, vec_to)
+        cos_angle = dot_product
+
+        # Skew-symmetric matrix for cross product v × u (not normalized axis!)
+        K = torch.tensor(
+            [
+                [0, -v_cross_u[2], v_cross_u[1]],
+                [v_cross_u[2], 0, -v_cross_u[0]],
+                [-v_cross_u[1], v_cross_u[0], 0],
+            ],
+            device=self.device,
+        )
+
+        # Rodrigues' formula: R = I + K + K²/(1 + cos(θ))
+        # This is equivalent to: R = I + sin(θ)K + (1-cos(θ))K²
+        identity = torch.eye(3, device=self.device)
+        R = identity + K + torch.mm(K, K) / (1 + cos_angle)
+
+        return R
+
+    def _apply_rotation(self, vectors, R):
+        """Apply rotation matrix to vectors.
+
+        Args:
+            vectors (tensor): input vectors [..., 3]
+            R (tensor): rotation matrix [3, 3]
+
+        Returns:
+            rotated_vectors (tensor): rotated vectors [..., 3]
+        """
+        original_shape = vectors.shape
+        # Reshape to [..., 3] for matrix multiplication
+        vectors_flat = vectors.view(-1, 3)
+        # Apply rotation: v' = R @ v (transpose for batch operation)
+        rotated_flat = torch.mm(vectors_flat, R.t())
+        # Reshape back to original shape
+        return rotated_flat.view(original_shape)
+
+    # =====================================================================
+    # Computation functions
+    # =====================================================================
+    def sag(self, x, y, valid=None):
+        """Calculate sag (z) of the surface: z = f(x, y).
+
+        Valid term is used to avoid NaN when x, y exceed the data range, which happens in spherical and aspherical surfaces.
+
+        Calculating r = sqrt(x**2, y**2) may cause an NaN error during back-propagation. Because dr/dx = x / sqrt(x**2 + y**2), NaN will occur when x=y=0.
+        """
+        if valid is None:
+            valid = self.is_valid(x, y)
+
+        x, y = x * valid, y * valid
+        return self._sag(x, y)
+
+    def _sag(self, x, y):
+        """Calculate sag (z) of the surface: z = f(x, y).
+
+        Args:
+            x (tensor): x coordinate
+            y (tensor): y coordinate
+            valid (tensor): valid mask
+
+        Return:
+            z (tensor): z = sag(x, y)
+        """
+        raise NotImplementedError(
+            "_sag() is not implemented for {}".format(self.__class__.__name__)
+        )
+
+    def dfdxyz(self, x, y, valid=None):
+        """Compute derivatives of surface function. Surface function: f(x, y, z): sag(x, y) - z = 0. This function is used in Newton's method and normal vector calculation.
+
+        There are several methods to compute derivatives of surfaces:
+            [1] Analytical derivatives: The current implementation is based on this method. But the implementation only works for surfaces which can be written as z = sag(x, y). For implicit surfaces, we need to compute derivatives (df/dx, df/dy, df/dz).
+            [2] Numerical derivatives: Use finite difference method to compute derivatives. This can be used for those very complex surfaces, for example, NURBS. But it may suffer from numerical instability when the surface is very steep.
+            [3] Automatic differentiation: Use torch.autograd to compute derivatives. This can work for almost all the surfaces and is accurate, but it requires an extra backward pass to compute the derivatives of the surface function.
+        """
+        if valid is None:
+            valid = self.is_valid(x, y)
+
+        x, y = x * valid, y * valid
+        dx, dy = self._dfdxy(x, y)
+        return dx, dy, -torch.ones_like(x)
+
+    def _dfdxy(self, x, y):
+        """Compute derivatives of sag to x and y. (dfdx, dfdy, dfdz) =  (f'x, f'y, f'z).
+
+        Args:
+            x (tensor): x coordinate
+            y (tensor): y coordinate
+
+        Return:
+            dfdx (tensor): df / dx
+            dfdy (tensor): df / dy
+        """
+        raise NotImplementedError(
+            "_dfdxy() is not implemented for {}".format(self.__class__.__name__)
+        )
+
+    def d2fdxyz2(self, x, y, valid=None):
+        """Compute second-order partial derivatives of the surface function f(x, y, z): sag(x, y) - z = 0. This function is currently only used for surfaces constraints."""
+        if valid is None:
+            valid = self.is_within_data_range(x, y)
+
+        x, y = x * valid, y * valid
+
+        # Compute second-order derivatives of sag(x, y)
+        d2f_dx2, d2f_dxdy, d2f_dy2 = self._d2fdxy(x, y)
+
+        # Mixed partial derivatives involving z are zero
+        zeros = torch.zeros_like(x)
+        d2f_dxdz = zeros  # ∂²f/∂x∂z = 0
+        d2f_dydz = zeros  # ∂²f/∂y∂z = 0
+        d2f_dz2 = zeros  # ∂²f/∂z² = 0
+
+        return d2f_dx2, d2f_dxdy, d2f_dy2, d2f_dxdz, d2f_dydz, d2f_dz2
+
+    def _d2fdxy(self, x, y):
+        """Compute second-order derivatives of sag to x and y. (d2fdx2, d2fdxdy, d2fdy2) =  (f''xx, f''xy, f''yy).
+
+        Currently, we use finite difference method to compute the second-order derivatives. And the second-order derivatives are only used for surface constraints.
+
+        Args:
+            x (tensor): x coordinate
+            y (tensor): y coordinate
+
+        Return:
+            d2fdx2 (tensor): d2f / dx2
+            d2fdxdy (tensor): d2f / dxdy
+            d2fdy2 (tensor): d2f / dy2
+        """
+        delta_x = 1e-6
+        delta_y = 1e-6
+        d2fdx2 = (self._dfdxy(x + delta_x, y)[0] - self._dfdxy(x - delta_x, y)[0]) / (
+            2 * delta_x
+        )
+        d2fdy2 = (self._dfdxy(x, y + delta_y)[1] - self._dfdxy(x, y - delta_y)[1]) / (
+            2 * delta_y
+        )
+        d2fdxy = (self._dfdxy(x + delta_x, y)[1] - self._dfdxy(x - delta_x, y)[1]) / (
+            2 * delta_x
+        )
+        return d2fdx2, d2fdxy, d2fdy2
+
+    def is_valid(self, x, y):
+        """Valid points within the data range and boundary of the surface."""
+        return self.is_within_data_range(x, y) & self.is_within_boundary(x, y)
+
+    def is_within_boundary(self, x, y):
+        """Valid points within the boundary of the surface."""
+        if self.is_square:
+            valid = (torch.abs(x) <= (self.w / 2 + EPSILON)) & (
+                torch.abs(y) <= (self.h / 2 + EPSILON)
+            )
+        else:
+            r = self.r
+            valid = (x**2 + y**2) <= (r**2 + EPSILON)
+
+        return valid
+
+    def is_within_data_range(self, x, y):
+        """Valid points inside the data region of the sag function."""
+        return torch.ones_like(x, dtype=torch.bool)
+
+    def max_height(self):
+        """Maximum valid height."""
+        return 10e3
+
+    def surface_with_offset(self, x, y, valid_check=True):
+        """Calculate z coordinate of the surface at (x, y).
+
+        This function is used in lens setup plotting and lens self-intersection detection.
+        """
+        x = x if torch.is_tensor(x) else torch.tensor(x, device=self.device)
+        y = y if torch.is_tensor(y) else torch.tensor(y, device=self.device)
+        if valid_check:
+            return self.sag(x, y) + self.d
+        else:
+            return self._sag(x, y) + self.d
+
+    def surface_sag(self, x, y):
+        """Calculate sag of the surface at (x, y).
+
+        This function is currently not used.
+        """
+        x = x if torch.is_tensor(x) else torch.tensor(x, device=self.device)
+        y = y if torch.is_tensor(y) else torch.tensor(y, device=self.device)
+        return self.sag(x, y).item()
+
+    # =====================================================================
+    # Optimization
+    # =====================================================================
+
+    def get_optimizer_params(self, lrs=[1e-4], optim_mat=False):
+        """Get optimizer parameters for different parameters.
+
+        Args:
+            lrs (list): learning rates for different parameters.
+            optim_mat (bool): whether to optimize material. Defaults to False.
+        """
+        raise NotImplementedError(
+            "get_optimizer_params() is not implemented for {}".format(
+                self.__class__.__name__
+            )
+        )
+
+    def get_optimizer(self, lrs=[1e-4], optim_mat=False):
+        """Get optimizer for the surface."""
+        params = self.get_optimizer_params(lrs, optim_mat=optim_mat)
+        return torch.optim.Adam(params)
+
+    def update_r(self, r):
+        """Update surface radius."""
+        r_max = self.max_height()
+        self.r = min(r, r_max)
+
+    # =====================================================================
+    # Visualization
+    # =====================================================================
+    def draw_r(self):
+        """Effective drawing radius, clamped to the valid data range."""
+        return min(self.r, self.max_height())
+
+    def draw_widget(self, ax, color="black", linestyle="solid"):
+        """Draw widget for the surface on the 2D plot."""
+        r_eff = self.draw_r()
+        r = torch.linspace(-r_eff, r_eff, 128, device=self.device)
+        z = self.surface_with_offset(
+            r, torch.zeros(len(r), device=self.device), valid_check=False
+        )
+        ax.plot(
+            z.cpu().detach().numpy(),
+            r.cpu().detach().numpy(),
+            color=color,
+            linestyle=linestyle,
+            linewidth=0.75,
+        )
+
+    def create_mesh(self, n_rings=32, n_arms=128, color=[0.06, 0.3, 0.6]):
+        """Create triangulated surface mesh.
+
+        Args:
+            n_rings (int): Number of concentric rings for sampling.
+            n_arms (int): Number of angular divisions.
+            color (List[float]): The color of the mesh.
+
+        Returns:
+            self: The surface with mesh data.
+        """
+        self.vertices = self._create_vertices(n_rings, n_arms)
+        self.faces = self._create_faces(n_rings, n_arms)
+        self.rim = self._create_rim(n_rings, n_arms)
+        self.mesh_color = color
+        return self
+
+    def _create_vertices(self, n_rings, n_arms):
+        """Create vertices in radial pattern. Vertices will be used to plot the surface in PyVista."""
+        n_vertices = n_rings * n_arms + 1
+        vertices = np.zeros((n_vertices, 3), dtype=np.float32)
+
+        # Center vertex
+        vertices[0] = [0.0, 0.0, self.surface_with_offset(0.0, 0.0).item()]
+
+        # Create meshgrid and flatten
+        rings_mesh, arms_mesh = np.meshgrid(
+            np.linspace(1, self.r, n_rings, endpoint=False),
+            np.linspace(0, 2 * np.pi, n_arms, endpoint=False),
+            indexing="ij",
+        )
+        rings_flat = rings_mesh.flatten()
+        arms_flat = arms_mesh.flatten()
+
+        # Calculate x, y, z coordinates
+        x_values = rings_flat * np.cos(arms_flat)
+        y_values = rings_flat * np.sin(arms_flat)
+        z_values = self.surface_with_offset(x_values, y_values).cpu().numpy()
+
+        # Fill vertices array
+        vertices[1:, 0] = x_values
+        vertices[1:, 1] = y_values
+        vertices[1:, 2] = z_values
+
+        return vertices
+
+    def _create_faces(self, n_rings, n_arms):
+        """Create triangular faces. Faces will be used to plot the surface in PyVista."""
+        n_faces = n_arms * (2 * n_rings - 1)
+        faces = np.zeros((n_faces, 3), dtype=np.uint32)
+        normal_direction = -1 if self.mat2.name != "air" else 1
+
+        # Create central triangles
+        for j in range(n_arms):
+            if normal_direction == 1:
+                faces[j] = [0, 1 + j, 1 + (j + 1) % n_arms]
+            else:
+                # Flip winding order for opposite normal direction
+                faces[j] = [0, 1 + (j + 1) % n_arms, 1 + j]
+
+        # Create radial quads (2 triangles each)
+        face_idx = n_arms
+
+        for i_ring in range(1, n_rings):
+            for j_arm in range(n_arms):
+                # Get indices for current ring vertices
+                a = 1 + (i_ring - 1) * n_arms + j_arm
+                b = 1 + (i_ring - 1) * n_arms + (j_arm + 1) % n_arms
+
+                # Get indices for next ring
+                c = 1 + i_ring * n_arms + j_arm
+                d = 1 + i_ring * n_arms + (j_arm + 1) % n_arms
+
+                # Create two triangles per quad
+                if normal_direction == 1:
+                    faces[face_idx] = [a, c, b]
+                    faces[face_idx + 1] = [b, c, d]
+                else:
+                    # Flip winding order for opposite normal direction
+                    faces[face_idx] = [a, b, c]
+                    faces[face_idx + 1] = [b, d, c]
+                face_idx += 2
+
+        return faces
+
+    def _create_rim(self, n_rings, n_arms):
+        """Create rim (outer edge) vertices. Rims will be used to bridge two surfaces."""
+        if n_rings == 0:
+            return RimCurve(self.vertices[[0]], is_loop=False)
+
+        # Get outer ring vertices
+        start_idx = 1 + (n_rings - 1) * n_arms
+        rim_vertices = self.vertices[start_idx : start_idx + n_arms]
+        return RimCurve(rim_vertices, is_loop=True)
+
+    def get_polydata(self):
+        """Get PyVista PolyData object from previously generated vertices and faces.
+
+        PolyData object will be used to draw the surface and export as .obj file.
+        """
+        from pyvista import PolyData
+
+        face_vertex_n = 3  # vertices per triangle
+        formatted_faces = np.hstack(
+            [
+                face_vertex_n * np.ones((self.faces.shape[0], 1), dtype=np.uint32),
+                self.faces,
+            ]
+        )
+        return PolyData(self.vertices, formatted_faces)
+
+    # =====================================================================
+    # IO
+    # =====================================================================
+    def surf_dict(self):
+        surf_dict = {
+            "type": self.__class__.__name__,
+            "r": round(self.r, 4),
+            "(d)": round(self.d.item(), 4),
+            "pos_xy": (round(self.pos_x.item(), 4), round(self.pos_y.item(), 4)),
+            "vec_local": (
+                round(self.vec_local[0].item(), 4),
+                round(self.vec_local[1].item(), 4),
+                round(self.vec_local[2].item(), 4),
+            ),
+            "is_square": self.is_square,
+            "mat2": self.mat2.get_name(),
+        }
+
+        return surf_dict
+
+    def zmx_str(self, surf_idx, d_next):
+        """Return Zemax surface string."""
+        raise NotImplementedError(
+            "zmx_str() is not implemented for {}".format(self.__class__.__name__)
+        )
+
+
+class RimCurve:
+    """Simple curve class for surface rim, compatible with LineMesh interface."""
+
+    def __init__(self, vertices, is_loop=False):
+        self.vertices = (
+            vertices.copy() if hasattr(vertices, "copy") else np.array(vertices)
+        )
+        self.is_loop = is_loop
+        self.n_vertices = len(vertices)

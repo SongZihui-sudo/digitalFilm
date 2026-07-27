@@ -6,7 +6,10 @@ interface EditorState {
   film: FilmStyleSettings;
   previewUrl: string;
   resultUrl: string;
+  resultBasic: BasicAdjustments | null;
   loading: boolean;
+  generationStage: string;
+  generationError: string;
 }
 
 export const useEditorStore = defineStore('editor', {
@@ -22,12 +25,21 @@ export const useEditorStore = defineStore('editor', {
     },
     film: {
       preset: 'kodak_gold_200',
-      grain: 0,
-      halation: 0,
+      dof: {
+        enabled: false,
+        f_number: 5.6,
+        focal_length_mm: 85,
+        sensor_profile: 'full_frame',
+        focus_point_x: null,
+        focus_point_y: null,
+      },
     },
     previewUrl: '',
     resultUrl: '',
+    resultBasic: null,
     loading: false,
+    generationStage: '',
+    generationError: '',
   }),
 
   actions: {
@@ -42,9 +54,17 @@ export const useEditorStore = defineStore('editor', {
     },
     setResultUrl(url: string) {
       this.resultUrl = url;
+      this.resultBasic = { ...this.basic };
     },
     setLoading(v: boolean) {
       this.loading = v;
+      if (!v) this.generationStage = '';
+    },
+    setGenerationStage(stage: string) {
+      this.generationStage = stage;
+    },
+    setGenerationError(error: string) {
+      this.generationError = error;
     },
     resetEditor() {
       this.basic = {
@@ -58,10 +78,17 @@ export const useEditorStore = defineStore('editor', {
       };
       this.film = {
         preset: 'kodak_gold_200',
-        grain: 0,
-        halation: 0,
+        dof: {
+          enabled: false,
+          f_number: 5.6,
+          focal_length_mm: 85,
+          sensor_profile: 'full_frame',
+          focus_point_x: null,
+          focus_point_y: null,
+        },
       };
       this.resultUrl = '';
+      this.resultBasic = null;
     },
   },
 });

@@ -1,8 +1,10 @@
+import os
+import gc
+from pathlib import Path
+
 import gradio as gr
 import torch
 import torchvision.transforms as transforms
-import os
-import gc
 from PIL import Image
 
 from models.digitalFilm_v2 import digitalFilmv2
@@ -15,6 +17,12 @@ SCALE_RATIO = 0.6
 GITHUB_REPO_URL = "https://github.com/SongZihui-sudo/digitalFilm"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def load_config(options_path):
+    cur_options = everyThingOptions(str(options_path))
+    cur_options.load_config()
+    return cur_options
 
 def adaptive_resize(image: Image.Image) -> Image.Image:
     w, h = image.size
@@ -29,13 +37,9 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-def load_config(options_path):
-    cur_options = everyThingOptions(options_path)
-    cur_options.load_config()
-    return cur_options
 
 def load_model(model_path):
-    options = load_config("./options/digitalFilm.yaml")
+    options = load_config(Path(__file__).resolve().parent / "options" / "digitalFilm.yaml")
     model = digitalFilmv2(0, options.opt.global_config, options.opt.model_config)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model = model.to(device)
@@ -44,12 +48,16 @@ def load_model(model_path):
 
 @torch.inference_mode()
 def process_images(image, model_choice):
-    image = transform(image)
-    print(os.path.join("checkpoints", model_choice))
-    model = load_model(os.path.join("checkpoints", model_choice))
-    model.eval()
-    image = image.unsqueeze(0)
+    if image is None:
+        raise gr.Error("请先上传图片。")
+
+    image = transform(image).unsqueeze(0)
     image = image.to(device)
+
+    model_path = Path(__file__).resolve().parent / "checkpoints" / model_choice
+    print(model_path)
+    model = load_model(model_path)
+    model.eval()
     output = model.g(image)["out"]
     output = output.squeeze().cpu().clamp(0, 1)
     output = transforms.ToPILImage()(output)
@@ -58,7 +66,7 @@ def process_images(image, model_choice):
 
 # ----- 胶片模型元数据 -----
 
-MODELS_DIR = "checkpoints"
+MODELS_DIR = str(Path(__file__).resolve().parent / "checkpoints")
 
 FILM_INFO = {
     "kodak_gold_200.pth": {
@@ -232,7 +240,11 @@ def main():
             inputs=[model_key_input],
             outputs=[model_state, cur_model_display, main_page, model_page, model_cards]
         )
-        run_btn.click(process_images, inputs=[image_input, model_state], outputs=image_output)
+        run_btn.click(
+            process_images,
+            inputs=[image_input, model_state],
+            outputs=image_output,
+        )
 
     demo.launch(server_name="0.0.0.0", server_port=7860)
 

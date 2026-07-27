@@ -39,21 +39,43 @@
       <div
         v-if="currentImageUrl"
         class="preview-canvas"
-        :class="{ 'is-fit': fitToScreen }"
+        :class="{ 'is-fit': fitToScreen, 'is-focus-picking': isFocusPicking }"
       >
-        <BeforeAfterSlider
-          v-if="showCompare"
-          :before-url="currentImageUrl"
-          :after-url="displayImageUrl"
-          class="preview-media"
-        />
+        <div class="preview-container" ref="previewContainerRef">
+          <BeforeAfterSlider
+            v-if="showCompare"
+            :before-url="currentImageUrl"
+            :after-url="displayImageUrl"
+            class="preview-media"
+          />
 
-        <img
-          v-else
-          :src="displayImageUrl"
-          :alt="currentImageName"
-          class="preview-image"
-        />
+          <img
+            v-else
+            :src="displayImageUrl"
+            :alt="currentImageName"
+            class="preview-image"
+            :style="{ cursor: isFocusPicking ? 'crosshair' : 'default' }"
+            @click="handleImageClick"
+          />
+
+          <!-- 对焦点标记 -->
+          <div
+            v-if="editorStore.film.dof?.enabled && editorStore.film.dof?.focus_point_x != null"
+            class="focus-dot"
+            :style="{
+              left: (editorStore.film.dof!.focus_point_x! * 100) + '%',
+              top: (editorStore.film.dof!.focus_point_y! * 100) + '%',
+            }"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+              <circle cx="12" cy="12" r="4" fill="none"/>
+              <line x1="12" y1="1" x2="12" y2="7"/>
+              <line x1="12" y1="17" x2="12" y2="23"/>
+              <line x1="1" y1="12" x2="7" y2="12"/>
+              <line x1="17" y1="12" x2="23" y2="12"/>
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div v-else class="main-preview__empty">
@@ -92,6 +114,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { BasicAdjustments } from '@/models/edit'
 import { useProjectStore } from '@/stores/projectStore'
 import { useEditorStore } from '@/stores/editorStore'
 import BeforeAfterSlider from '@/components/editor/BeforeAfterSlider.vue'
@@ -110,6 +133,23 @@ const saving = ref(false)
 const deleting = ref(false)
 const loadingSettings = ref(false)
 
+/** 当 DOF 启用且对焦点被点击时启用"拾取焦点"模式 */
+const isFocusPicking = computed(() =>
+  editorStore.film?.dof?.enabled ?? false
+)
+const previewContainerRef = ref<HTMLElement | null>(null)
+
+function handleImageClick(e: MouseEvent) {
+  if (!editorStore.film?.dof?.enabled) return
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  // 计算点击位置相对于图片的归一化坐标 (0-1)
+  const x = (e.clientX - rect.left) / rect.width
+  const y = (e.clientY - rect.top) / rect.height
+  editorStore.film.dof!.focus_point_x = Math.max(0, Math.min(1, x))
+  editorStore.film.dof!.focus_point_y = Math.max(0, Math.min(1, y))
+}
+
 const userStore = useUserStore()
 const showLoginModal = ref(false)
 const showDeleteConfirm = ref(false)
@@ -120,8 +160,10 @@ const currentImageUrl = computed(() => currentImage.value?.originalUrl || '')
 const currentImageName = computed(() => currentImage.value?.name || '')
 const resultUrl = computed(() => editorStore.resultUrl)
 
-// Canvas-based real-time preview of basic adjustments on the ORIGINAL image
-const basicSettings = () => ({
+// Canvas-based real-time preview of basic adjustments. After film generation,
+// it starts from the result and applies only the adjustment delta, so sliders
+// remain responsive without re-running the expensive backend pipeline.
+const currentBasic = (): BasicAdjustments => ({
   exposure: editorStore.basic.exposure,
   contrast: editorStore.basic.contrast,
   highlights: editorStore.basic.highlights,
@@ -131,15 +173,29 @@ const basicSettings = () => ({
   saturation: editorStore.basic.saturation,
 })
 
+const previewBaseUrl = computed(() => resultUrl.value || currentImageUrl.value)
+
+const basicSettings = (): BasicAdjustments => {
+  const resultBasic = editorStore.resultBasic
+  if (!resultUrl.value || !resultBasic) return currentBasic()
+
+  return {
+    exposure: editorStore.basic.exposure - resultBasic.exposure,
+    contrast: editorStore.basic.contrast - resultBasic.contrast,
+    highlights: editorStore.basic.highlights - resultBasic.highlights,
+    shadows: editorStore.basic.shadows - resultBasic.shadows,
+    temperature: editorStore.basic.temperature - resultBasic.temperature,
+    tint: editorStore.basic.tint - resultBasic.tint,
+    saturation: editorStore.basic.saturation - resultBasic.saturation,
+  }
+}
+
 const { previewSrc, loading: previewLoading } = useImagePreview(
-  currentImageUrl,
+  previewBaseUrl,
   basicSettings,
 )
 
-// 有后端结果时显示结果，否则显示 Canvas 预览（无结果时回退到原图）
-const displayImageUrl = computed(() =>
-  resultUrl.value || previewSrc.value || currentImageUrl.value,
-)
+const displayImageUrl = computed(() => previewSrc.value || previewBaseUrl.value)
 
 async function handleDeleteImage() {
   if (!userStore.isLoggedIn) {
@@ -197,8 +253,6 @@ async function handleSaveSettings() {
       tint: editorStore.basic.tint,
       saturation: editorStore.basic.saturation,
       preset: editorStore.film?.preset ?? '',
-      grain: editorStore.film?.grain ?? 0,
-      halation: editorStore.film?.halation ?? 0,
     })
 
     alert('当前的编辑已保存')
@@ -227,8 +281,6 @@ async function loadImageSettings(imageId: string) {
 
     if (editorStore.film) {
       editorStore.film.preset = settings.preset ?? ''
-      editorStore.film.grain = settings.grain ?? 0
-      editorStore.film.halation = settings.halation ?? 0
     }
   } catch (error) {
     console.error('load image edit settings failed:', error)
@@ -244,8 +296,6 @@ async function loadImageSettings(imageId: string) {
 
     if (editorStore.film) {
       editorStore.film.preset = ''
-      editorStore.film.grain = 0
-      editorStore.film.halation = 0
     }
   } finally {
     loadingSettings.value = false
@@ -255,6 +305,8 @@ async function loadImageSettings(imageId: string) {
 watch(
   () => currentImageId.value,
   async (newImageId) => {
+    editorStore.resultUrl = ''
+    editorStore.resultBasic = null
     if (!newImageId) return
     await loadImageSettings(newImageId)
   },
@@ -324,8 +376,18 @@ watch(
   overflow: auto;
 }
 
+.preview-canvas.is-focus-picking {
+  cursor: crosshair;
+}
+
 .preview-canvas.is-fit {
   overflow: hidden;
+}
+
+/* 图片容器（用于定位对焦点标记） */
+.preview-container {
+  position: relative;
+  display: inline-block;
 }
 
 .preview-image,
@@ -339,6 +401,24 @@ watch(
     filter 120ms ease,
     transform 120ms ease,
     box-shadow 120ms ease;
+}
+
+/* 对焦点标记 */
+.focus-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+.focus-dot svg {
+  opacity: 0.9;
+}
+.focus-dot circle {
+  stroke: #ffd700;
+}
+.focus-dot line {
+  stroke: #ffd700;
 }
 
 /* 适应屏幕模式 */
