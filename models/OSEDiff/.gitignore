@@ -1,0 +1,61 @@
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# --- Model weights / checkpoints ---
+preset/models/
+preset/**/*.pth
+preset/**/*.ckpt
+preset/**/*.safetensors
+preset/**/*.bin
+
+# --- Dataset & results (large generated files) ---
+preset/datasets/**/results_osediff/
+preset/datasets/**/inputs/
+preset/datasets/**/gt/
+
+# --- Logs & experiment outputs ---
+logs/
+runs/
+experiments/
+tensorboard/
+wandb/
+lightning_logs/
+
+# --- Results & outputs ---
+output/
+results/
+samples/
+
+# --- Config / temp ---
+*.log
+*.tmp
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+
+preset/datasets/test_dataset/input/
+
+lsdirtrain.txt
+
+experience/
+
+paper/

@@ -24,6 +24,12 @@ export function useFilmGeneration() {
         editorStore.setGenerationStage('正在应用胶片风格…');
       }
 
+      if (editorStore.film.sr?.enabled) {
+        editorStore.setGenerationStage('正在应用画质增强…')
+      } else {
+        editorStore.setGenerationStage('正在应用胶片风格…');
+      }
+
       const result = await filmService.generate(
         projectStore.currentImage.id,
         editorStore.basic,
