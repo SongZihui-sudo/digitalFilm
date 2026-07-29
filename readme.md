@@ -1,476 +1,258 @@
 # DigitalFilm
 
-> A digital darkroom system that simulates film aesthetics using neural networks.
+> 
+> End-to-End film aesthetics simulation system built on physical decomposition and neural networks
 
-![app](example/app.png)
+DigitalFilm is a full-stack film style simulation solution that combines differentiable physical rendering pipelines with neural network training to deliver authentic film texture to digital imagery. It ships with a professional web editing workstation and developer-native MCP integration, serving both everyday color grading workflows and advanced custom extension scenarios.
 
-DigitalFilm is a project dedicated to film-style simulation, comprising the following components:
+![Output](./example/digital_output.svg)
 
-- **Model Training Pipeline** - Neural network-based film style transfer
-- **MCP Service** - Model Context Protocol integration for AI applications
-- **Modern Vue 3 Web Application** - Professional photo editing interface
-- **Multi-service Backend Architecture** - Main backend, static assets backend, image processing service
+## ✨ Core Features
 
-The project's objective is to render digital images with a film-like aesthetic using neural networks, while providing a professional and usable editing workflow.
-
----
-
-## Acknowledgements
-
-This project incorporates algorithms and concepts inspired by the following open-source work:
-
-- [**LYCO6273/Phos**](https://github.com/LYCO6273/Phos) — A physically-grounded film simulation based on computational optics concepts. Key ideas integrated into DigitalFilm's differentiable pipeline:
-  - **Pyramid Bloom**: Multi-scale Gaussian pyramid halation with wavelength-dependent scattering radii (Red > Green > Blue), simulating light scattering in film emulsions.
-  - **Density-Domain Crosstalk**: Subtractive colour mixing via density-domain dye coupling (`D = -log₁₀(E)`, additive mixing, `T = 10⁻ᴰ`), accurately modelling dye absorption overlap in colour negative film.
+- 🎞️ **Physics-Driven Film Emulation**: The v2 pipeline decomposes film imaging into differentiable stages — exposure, dye coupling, halation diffusion, tone response, and grain — with fully interpretable parameters and intuitive manual tuning
+- ⚡ **Lightweight Efficient Inference**: Replaces large generative networks with matrices, 1D/3D LUTs for low VRAM footprint and real-time rendering on consumer GPUs
+- 🖥️ **Full-Featured Web Workstation**: Complete image editing application covering base color adjustment, film presets, depth-of-field simulation and quality enhancement
+- 🔌 **Native MCP Protocol Support**: Built-in Model Context Protocol service for seamless integration with AI agents and intelligent workflows
+- 🧠 **End-to-End Trainable**: Supports custom dataset training for proprietary film styles; near-identity initialization ensures stable training even on small datasets
 
 ---
 
-## Quick Start
+## 📋 Prerequisites
 
-Run the demo  
-```bash
+The following runtime environments are required to run this project:
+
+- Python 3.10+
+- Go 1.20+
+- Node.js 16+ (for frontend development / build)
+- pnpm / npm / yarn
+
+Install Python dependencies:
+
+```
+pip install -r requirements.txt
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Run Demo
+
+Test the core film emulation capability without launching the full stack:
+
+```
 python demo.py
 ```
 
-Test mcp
-```bash
-npx @modelcontextprotocol/inspector --transport stdio -- python mcp_server.py
+### 2. Test MCP Service
+
+Verify MCP protocol connectivity:
+
+```
+npx @modelcontextprotocol/inspector --transport stdio -- python app/mcp_server.py
 ```
 
-## Feature Overview
+### 3. Launch Full Web Application
 
-- Uses neural networks to learn the mapping from digital images to film-style images.
-- Supports previewing and saving basic image editing parameters.
-- Supports project and image management.
-- Supports image uploading, static hosting, and access to generated result images.
-- Supports integration with other AI applications via the MCP service.
-- Supports image generation and processing via a dedicated, standalone image service.
+It is recommended to start the full-stack services in the following order:
 
----
+#### Step 1: Start Image Processing Service
 
-## Project Structure
+Handles model inference, image editing and style generation:
 
-A typical project structure is as follows:
-
-```text
-DigitalFilm/
-├── app/                    # DigitalFilm application frontend / desktop client code
-├──────── master_backend/         # Main backend: manages data for projects, images, parameters, etc.
-├──────── static_backend/         # Static assets backend: hosts uploaded images and generated results
-├──────── image_server.py         # Python image processing service
-├── pipeline.py             # Training entry point
-├── mcp_server.py           # MCP service entry point
-├── options/                # Model and training configurations
-├── example/                # Example images
-└── ...
+```
+python app/image_server.py
 ```
 
-## Environmental Dependencies
-To use this project, you must install:
+#### Step 2: Start Master Backend
 
-Python
-Go
-If the frontend component within the `app/` directory utilizes Vue, you will also need:
+Manages projects, image metadata, editing parameters, user permissions and frontend data exchange:
 
-Node.js
-pnpm / npm / yarn
-
-## Model Training
-The entry point for training is:
-
-```BASH
-python pipeline.py
 ```
-You can adjust training parameters by modifying the configuration files; examples include:
-
-Dataset path
-Batch size
-Learning rate
-LUT dimensions
-Whether to enable 3D / 4D LUTs
-Number of basis functions
-Options such as `residual`, `blend`, etc.
-
-## MCP Service
-The project provides an MCP service, allowing other AI applications to integrate with and utilize its capabilities. Startup Method:
-
-```BASH
-python mcp_server.py
-```
-Once started, you can integrate this MCP service into any MCP-compatible AI application or agent system to leverage DigitalFilm's capabilities.
-
-## Application Startup
-The `app/` directory contains the DigitalFilm application, which supports the following features:
-
-Basic image editing
-Image uploading and project management
-Film-style conversion
-Image parameter saving and restoration
-Pre-startup Requirements
-To use the DigitalFilm App, you must first launch the following services:
-
-Python Image Editing Server
-Go Main Backend
-Go
-1. Launch the Image Processing Service
-The image processing service is responsible for executing tasks related to image generation, image editing, and model inference.
-
-```BASH
-python image_server.py
-```
-
-2. Launch the Main Backend
-The main backend is responsible for:
-
-Project data management
-Image metadata management
-Storage of editing parameters
-Preset configuration management
-Data interaction with the frontend
-Navigate to the main backend directory, then compile and run:
-
-
-``` BASH
+cd app/master_backend
 go run .
-```
-Alternatively, compile first:
-
-```BASH
+# Or compile and run
 go build -o master_backend
 ./master_backend
 ```
 
-3. Launch the Static Assets Backend
-The static assets backend is responsible for:
+#### Step 3: Start Static Asset Backend
 
-Hosting uploaded original images
-Hosting generated result images
-Providing HTTP access URLs for use by the frontend and other backend services
-Navigate to the static backend directory, then compile and run:
+Hosts uploaded original images and rendered results, and provides HTTP access endpoints:
 
-```BASH
-go run .
 ```
-
-Alternatively:
-
-```BASH
+cd app/static_backend
+go run .
+# Or compile and run
 go build -o static_backend
 ./static_backend
 ```
-4. Launch the App
-If the `app/` directory contains the frontend project:
 
-```BASH
-cd app
-npm run dev
+#### Step 4: Start Frontend Application
+
 ```
-Or:
-
-```BASH
+cd app/frontend
+npm run dev
+# Or with pnpm
 pnpm dev
 ```
-Once launched, you can access and use the DigitalFilm application in your web browser. Recommended Startup Sequence
-It is recommended to launch the components in the following order:
+
+Once all services are up, access the DigitalFilm editing workstation in your browser.
+
+> 
+> 💡 Admin initialization: After first deployment, run the following SQL to grant admin privileges to the first user
+> 
+> 
+> ```
+> UPDATE users SET is_admin = 1 WHERE username = 'your_username';
+> ```
+
+---
+
+## 📂 Project Structure
 
 ```
-python image_server.py
-master_backend
-static_backend
-app
+DigitalFilm/
+├── app/                    # Full-stack web application code
+│   ├── frontend/           # Frontend UI (Vue + Vite + TypeScript)
+│   ├── master_backend/     # Master backend: projects, images, parameters, user management
+│   ├── static_backend/     # Static asset backend: hosts originals and outputs
+│   ├── image_server.py     # Python image processing & model inference service
+│   └── mcp_server.py       # MCP protocol service
+├── options/                # Model training configuration files
+├── example/                # Sample images and demo assets
+├── pipeline.py             # Model training entry point
+└── ...
 ```
 
-You need to manually execute SQL to set up the first administrator user.
-```sql
-UPDATE users SET is_admin = 1 WHERE username = 'YourUsername';
+---
+
+## 🎞️ digitalFilm v2 Physical Rendering Pipeline
+
+![digitalFilmv2](./example/digitalFILm.png)
+
+digitalFilm v2 is the core technical module of the project. It adopts a **physically decomposed differentiable rendering pipeline** design, addressing the limitations of the v1 fully-convolutional GAN approach: high VRAM cost, poor interpretability, and unstable training on small datasets.
+
+### Design Philosophy
+
+Inspired by computational optics film simulation concepts (credits to the Phos project), the pipeline decomposes the physical film imaging process into independent differentiable stages, each corresponding to a real-world film formation step. All modules are initialized near identity mapping and learn residual style offsets, ensuring physical interpretability and greatly improving training stability on small datasets.
+
+### Full Pipeline Flow
+
+The pipeline is divided into two processing domains: **linear domain** and **curve domain**.
+
+#### Linear Domain (Optical Physics Stage)
+
+1. **ExposureModule**: Per-channel exposure gain and bias adjustment, simulating film exposure compensation
+2. **Spectral Dye Mixing**: Two selectable modes
+   - `linear` lightweight mode: 3×3 spectral mixing matrix + residual 3D LUT, balancing speed and basic color coupling
+   - `density` physics mode (Phos-style): linear dye crosstalk in density domain + compact density 3D LUT, more faithful to the subtractive mixing physics of film dyes
+3. **PyramidBloom**: Multi-scale Gaussian pyramid simulates light scattering in the emulsion layer, with wavelength-dependent scattering radius (red scatters farthest, blue closest) to reproduce authentic film highlight halation
+
+#### Curve Domain (Photochemical Processing Stage)
+
+4. **ToneResponseCurve**: Per-channel 1D LUT emulates the film H&D characteristic curve, delivering the classic toe-linear-shoulder tone response of analog film
+5. **Residual Color Correction**: Compact 3D LUT captures non-linear color crossover effects beyond linear matrix capability
+6. **Grain**: Multi-scale luminance-modulated noise with heavier grain in shadows, reproducing organic film grain texture
+
+### Technical Advantages
+
+- Fully differentiable end-to-end pipeline, supporting end-to-end training
+- Parameters carry clear physical meaning, facilitating manual fine-tuning and style control
+- Far lower computational cost than fully convolutional generative models, enabling real-time inference
+- Near-identity initialization prevents training collapse on small datasets
+
+---
+
+## 🖥️ Web Editing Application
+
+### Core Functions
+
+- **Base Color Tools**: Full parameter control over exposure, contrast, highlights/shadows, color temperature/tint, and saturation
+- **Film Style Processing**: Built-in multiple digitalFilm v2 film presets, with independent controls for grain intensity and halation strength, plus advanced color grading
+- **Depth of Field Simulation**: DeepAnything2-based depth estimation for large-aperture bokeh effect
+- **Quality Enhancement**: OSEDiff-powered image restoration, detail enhancement and noise reduction
+
+---
+
+## 🔌 MCP Service
+
+The project includes a built-in MCP (Model Context Protocol) service, which seamlessly integrates DigitalFilm's film emulation and image editing capabilities into MCP-compatible AI applications and intelligent agent systems for building automated smart imaging workflows.
+
+Launch command:
+
+```
+python app/mcp_server.py
 ```
 
-## DigitalFilm Web Application
+---
 
-### Tech Stack
-- **Vue 3.4+** - Progressive JavaScript framework with Composition API
-- **TypeScript 5.4+** - Type-safe development
-- **Vite 5.2+** - Lightning-fast build tool
-- **Pinia 2.3+** - State management
-- **Vue Router 4.3+** - Official routing
-- **Axios 1.7+** - HTTP client
+## 🧠 Model Training
 
-### Architecture
+The training entry point is `pipeline.py`. Customize training parameters by modifying configuration files under the `options/` directory:
 
-#### Frontend Structure (`app/frontend/`)
+- Dataset path and data loading strategy
+- Training hyperparameters: batch size, learning rate, iterations
+- Model structure: LUT dimensions, basis count
+- Feature toggles: 3D/4D LUT, residual connection, blending mode
+
+Start training:
+
 ```
-src/
-├── api/              # API Layer
-│   ├── adminApi.ts   # Admin management
-│   ├── client.ts     # HTTP client configuration
-│   ├── imageApi.ts   # Image operations
-│   ├── projectApi.ts # Project management
-│   └── userApi.ts    # User authentication
-├── components/       # Vue Components
-│   ├── common/       # Reusable components (LoginModal, ThemeToggle, etc.)
-│   ├── editor/       # Editing panels (BasicAdjust, FilmStyle, Export, etc.)
-│   ├── layout/       # Layout components (Sidebar, Preview, Panel)
-│   └── project/      # Project components (ThumbnailList, ProjectList)
-├── composables/      # Composition Functions
-│   ├── useAvatar.ts
-│   ├── useFilmGeneration.ts
-│   ├── useImagePreview.ts
-│   ├── useProjectManager.ts
-│   └── useTheme.ts
-├── stores/          # Pinia State Management
-│   ├── adminStore.ts
-│   ├── editorStore.ts
-│   ├── projectStore.ts
-│   ├── themeStore.ts
-│   └── userStore.ts
-├── views/           # Page Views
-│   ├── DarkroomWorkspace.vue
-│   ├── AdminDashboard.vue
-│   └── AdminLogin.vue
-└── services/        # Business Logic Services
+python pipeline.py
 ```
 
-### Key Features
+---
 
-#### 1. Professional Workspace (`DarkroomWorkspace.vue`)
-- **Three-panel Layout**: Left sidebar for projects, center for preview, right for editing tools
-- **Theme System**: Support for dark/light/auto themes with smooth transitions
-- **Responsive Design**: Adapts to different screen sizes
-- **Real-time Preview**: Instant visual feedback on all adjustments
+## 🗺️ Roadmap
 
-#### 2. Photo Editing Capabilities
+✅ **Completed**
 
-**Basic Adjustments** (`BasicAdjustPanel.vue`)
-- Exposure adjustment (-100 to +100)
-- Contrast control
-- Highlights/Shadows tuning
-- Temperature/Tint adjustment
-- Saturation control
+- Physically decomposed digitalFilm v2 rendering pipeline
+- Depth of field simulation
+- Image quality enhancement
+- MCP protocol service support
 
-**Film Style Processing** (`FilmStylePanel.vue`)
-- Multiple film presets
-- Grain effect simulation
-- Highlight bloom effects
-- Advanced color grading
+📌 **Planned**
 
-**Before/After Comparison** (`BeforeAfterSlider.vue`)
-- Interactive slider for instant comparison
-- Smooth transition between original and edited versions
+- History system: full undo/redo for editing steps
+- Preset management: save, import and share custom presets
+- Batch processing: apply styles and color grades to multiple images
+- Advanced color tools: curves, levels, independent HSL adjustment
+- Agent-driven editing: AI-powered auto color grading via MCP
+- Plugin system: third-party feature extension support
+- Native RAW support: direct RAW negative processing
 
-**Professional Export** (`ExportPanel.vue`)
-- Multiple format support
-- Quality control
-- Size adjustment
-- Batch export options
+---
 
-#### 3. Project Management
-- Create/delete projects with cascading data management
-- Image upload with automatic project assignment
-- Thumbnail grid view with efficient loading
-- Project switching with state preservation
+## 🤝 Contributing
 
-#### 4. User System & Admin Dashboard
-**User Features**
-- JWT token authentication
-- Role-based access control (user/admin)
-- Login modal with form validation
-- Session persistence
+Contributions are welcome! Follow these steps:
 
-**Admin Dashboard** (`AdminDashboard.vue`)
-- User CRUD operations
-- Password management
-- Admin role assignment/revocation
-- User statistics display
-- Permission control
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-#### 5. State Management System
+---
 
-**Editor Store** (`editorStore.ts`)
-```typescript
-interface EditSettings {
-  basic: {
-    exposure: number
-    contrast: number
-    highlights: number
-    shadows: number
-    temperature: number
-    tint: number
-    saturation: number
-  }
-  film: {
-    preset: string
-    grain: number
-    bloom: number
-  }
-}
-```
+## 📄 License
 
-**Project Store** (`projectStore.ts`)
-- Current project management
-- Image list with metadata
-- Upload status tracking
-- Selection state
+This project is open-sourced under the GPL-v3 License. See the [LICENSE](LICENSE) file for details.
 
-#### 6. Theme System
-Dynamic CSS variables for seamless theme switching:
-```css
-[data-theme="dark"] {
-  --bg-app: #1a1a1a;
-  --text-primary: #ffffff;
-}
+---
 
-[data-theme="light"] {
-  --bg-app: #ffffff;
-  --text-primary: #1a1a1a;
-}
-```
+## 🙏 Acknowledgments
 
-### Development Workflow
+- Vue.js / Vite / TypeScript frontend technology stack
+- All developers who have contributed code and suggestions to this project
+- [Phos](https://link.wtturl.cn/?target=https%3A%2F%2Fgithub.com%2FZacharyHu0%2FPhos&scene=im&aid=497858&lang=zh) project for the computational optics film simulation inspiration
 
-#### Frontend Development
-```bash
-cd app/frontend
+---
 
-# Install dependencies
-npm install
+## 👤 Author
 
-# Development server
-npm run dev
+- **SongZihui-sudo** - *Initial work* - \[SongZihui-sudo\]
 
-# Type checking
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-#### Build Configuration
-- **Vite Config**: Optimized for Vue 3 SFCs and TypeScript
-- **TypeScript Config**: Strict mode with path aliases
-- **Production Build**: Minified, tree-shaken, optimized assets
-
-### API Integration
-
-#### HTTP Client Setup
-```typescript
-// api/client.ts
-const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// Request interceptor for JWT
-client.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-```
-
-#### Service Integration
-- **Image Service**: Upload, processing, and retrieval
-- **Project Service**: CRUD operations for projects
-- **Admin Service**: User management and authentication
-- **File Service**: Static asset hosting and delivery
-
-### Advanced Features
-
-#### User Experience Enhancements
-- **Keyboard Shortcuts**: Efficient workflow with keyboard controls
-- **Smart Caching**: Image and settings caching for improved performance
-- **Responsive Layout**: Adapts to different screen sizes and orientations
-- **Accessibility**: WCAG compliant interface with proper ARIA labels
-- **Offline Support**: Progressive Web App capabilities for offline editing
-
-#### Development Features
-- **Hot Module Replacement**: Instant development updates
-- **TypeScript Strict Mode**: Enhanced type safety and developer experience
-- **ESLint & Prettier**: Code quality and formatting standards
-- **Component Testing**: Comprehensive test coverage
-- **Storybook**: Component documentation and development
-
-#### Performance Optimizations
-- **Code Splitting**: Lazy-loaded components and routes
-- **Tree Shaking**: Removal of unused code
-- **Image Optimization**: Efficient image loading and caching
-- **Bundle Size Optimization**: Minimal production bundle size
-- **Memory Management**: Efficient memory usage for large images
-
-### Future Roadmap
-
-#### Planned Features
-- [ ] **History System**: Undo/redo functionality for all edits
-- [ ] **Presets Management**: Save and share custom editing presets
-- [ ] **Batch Processing**: Apply edits to multiple images simultaneously
-- [ ] **Advanced Tools**: Curves, levels, and HSL adjustments
-- [ ] **Agent-driven Editing**: Intelligent image editing through AI agents and MCP integration
-- [ ] **Cloud Sync**: Cross-device project synchronization
-- [ ] **Collaboration**: Real-time collaborative editing
-- [ ] **Mobile App**: Native mobile applications
-- [ ] **Plugin System**: Extensible architecture for third-party plugins
-- [ ] **RAW Support**: Direct RAW file processing
-
-## Model Description
-
-DigitalFilmv2 is a lightweight model for generating digital-to-film style transformations. Its core concepts include:
-
-Basis 3D LUT mixture
-(Optional) Basis 4D LUT mixture
-A global feature network to predict LUT mixing weights
-(Optional) Residual blending
-LUT regularization
-Total Variation regularization
-Monotonicity regularization
-
-The model supports the following parameters:
-- use_3d
-- use_4d
-- num_basis_3d
-- num_basis_4d
-- lut3d_dim
-- lut4d_dim
-- num_context_bins
-- learn_blend
-
-Its overall objective is to combine the interpretability and expressive power of LUTs with the predictive capabilities of neural networks—in a lightweight manner—to achieve digital image rendering with a distinct "film look."
-
-The model primarily consists of the following modules:
-
-1. GlobalFeatureNet
-A lightweight CNN designed to extract global features from the input image and predict:
-
-- 3D LUT basis weights
-- 4D LUT basis weights
-- Branch blending weights
-
-2. BasisLUT3D
-Learns multiple trainable 3D LUT bases and blends them using the predicted weights:
-
-- Outputs the blended 3D LUT
-- Adds an identity LUT as an initial baseline
-- Ensures the output remains within the [0, 1] range
-
-3. BasisLUT4D
-Learns multiple trainable 4D LUT bases and incorporates a "context" dimension to perform more complex color mapping. 4. TV / Monotonicity Regularization
-To ensure the smoothness and plausibility of the LUT, the following are incorporated into the training process:
-
-- TV Regularization
-- Monotonicity Regularization
-
-5. Residual Blending
-Incorporating a certain proportion of the input image into the final output helps enhance stability and naturalness:
-
-```TEXT
-out = 0.7 * lut_output + 0.3 * input
-```
-
-## Development Notes
-The project currently consists of multiple services; it is recommended to debug them independently during development:
-
-Python Model / Image Service
-Go Main Backend
-Go Static Assets Backend
-Frontend App
+⭐ If you find this project helpful, please give it a Star!
