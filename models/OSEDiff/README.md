@@ -1,0 +1,416 @@
+﻿<div align="center">
+
+
+<h1>One-Step Effective Diffusion Network for Real-World Image Super-Resolution</h1>
+
+<div>
+    <a href='https://scholar.google.com/citations?user=A-U8zE8AAAAJ&hl=zh-CN' target='_blank'>Rongyuan Wu<sup>1,2,*</sup></a>&emsp;
+    <a href='https://scholar.google.com/citations?user=ZCDjTn8AAAAJ&hl=zh-CN' target='_blank'>Lingchen Sun<sup>1,2,*</sup></a>&emsp;
+    <a href='https://scholar.google.com/citations?user=F15mLDYAAAAJ&hl=en' target='_blank'>Zhiyuan Ma<sup>1,*</sup></a>&emsp;
+    <a href='https://www4.comp.polyu.edu.hk/~cslzhang/' target='_blank'>Lei Zhang<sup>1,2,† </sup></a>
+</div>
+<div>
+    <sup>1</sup>The Hong Kong Polytechnic University, <sup>2</sup>OPPO Research Institute&emsp; 
+</div>
+
+[[paper]](https://arxiv.org/pdf/2406.08177)
+
+---
+
+</div>
+
+
+#### 🚩Accepted by NeurIPS2024
+
+
+
+
+
+
+😊 You may also want to check our new updates:
+
+- **VOSR (2026.04)** [Paper](https://arxiv.org/pdf/2604.03225) | [Code](https://github.com/cswry/VOSR)  🚩 Accepted by **CVPR2026**
+
+  A vision-only native generative framework for image restoration.
+
+- **TVT (2025.07)** [Paper](https://arxiv.org/abs/2507.20291) | [Code](https://github.com/Joyies/TVT)  🚩 Accepted by **ICCV2025**
+
+  We re-train the VAE of SD2.1 while maintaining its UNet for more precise Real-ISR.
+
+- **PiSA-SR (2024.12)** [Paper](https://arxiv.org/pdf/2412.03017) | [Code](https://github.com/csslc/PiSA-SR)  🚩 Accepted by **CVPR2025**
+
+  Adjustable diffusion network for super-resolution to meet your preference!
+
+- **AdcSR (2024.11)** [Paper](https://arxiv.org/pdf/2411.13383) | [Code](https://github.com/Guaishou74851/AdcSR) 🚩 Accepted by **CVPR2025**
+
+  Adversarial Diffusion Compression framework for super-resolution, **offering up to 9.3× speedup over OSEDiff**.
+
+- **CCSRv2 (2024.09)** [Paper](https://arxiv.org/pdf/2401.00877v2) | [Code](https://github.com/csslc/CCSR)  🚩 Accepted by **TIP2026**
+
+  Flexible and efficient diffusion sampling for super-resolution, **supporting arbitrary number of inference steps**, *e.g.*, 1~15 step(s).
+
+## 🔥 News
+- [2024.12] Updated OSEDiff-SD21base-face.
+- [2024.10] Updated training codes and [paper](https://arxiv.org/pdf/2406.08177). 💥💥💥Congratulations, OSEDiff has been applied to the OPPO Find X8 series!
+- [2024.07] Release OSEDiff-SD21base.
+- [2024.06] This repo is created.
+
+:star: If OSEDiff is helpful to your images or projects, please help star this repo. Thanks! :hugs:
+
+## 🎬 Overview
+![overview](asserts/framework.jpg)
+
+
+## 🔧 Dependencies and Installation
+
+1. Clone repo
+    ```bash
+    git clone https://github.com/cswry/OSEDiff.git
+    cd OSEDiff
+    ```
+
+2. Install dependent packages
+    ```bash
+    conda create -n OSEDiff python=3.10 -y
+    conda activate OSEDiff
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+3. Download Models 
+#### Dependent Models
+* [SD21 Base](https://huggingface.co/Manojb/stable-diffusion-2-1-base) (only needed for original OSEDiff training/inference)
+* [RAM](https://huggingface.co/spaces/xinyu1205/recognize-anything/blob/main/ram_swin_large_14m.pth)  
+* [DAPE](https://drive.google.com/file/d/1KIV6VewwO2eDC9g4Gcvgm-a0LDI7Lmwm/view?usp=drive_link)  
+* [DCAE](c) — required for DCAE-based SR model
+  * [dc-ae-f32c32-in-1.0](https://huggingface.co/mit-han-lab/dc-ae-f32c32-in-1.0) (32× compression, latent 32ch, recommended)
+  * [dc-ae-f64c128-in-1.0](https://huggingface.co/mit-han-lab/dc-ae-f64c128-in-1.0) (64× compression, latent 128ch)
+
+
+## ⚡ Quick Inference
+For Real-World Image Super-Resolution:
+```
+python test_osediff.py \
+-i preset/datasets/test_dataset/input \
+-o preset/datasets/test_dataset/output \
+--osediff_path preset/models/osediff.pkl \
+--pretrained_model_name_or_path SD21BASE_PATH \
+--ram_ft_path DAPE_PATH \
+--ram_path RAM_PATH
+```
+
+For Face Restoration:
+```
+python test_osediff.py \
+-i preset/datasets/test_dataset/input_face \
+-o preset/datasets/test_dataset/output_face \
+--upscale 1 \
+--osediff_path preset/models/osediff_face.pkl \
+--pretrained_model_name_or_path SD21BASE_PATH \
+--ram_ft_path DAPE_PATH \
+--ram_path RAM_PATH \
+--align_method nofix 
+```
+
+## 🚀 Calculate Inference Time
+For easy comparison, we provide the inference time testing script for osediff.
+```
+python test_inference_time.py \
+--osediff_path preset/models/osediff.pkl \
+--inference_iterations 500 \
+--warmup_iterations 5 \
+--process_size 512 \
+--pretrained_model_name_or_path SD21BASE_PATH \
+--ram_ft_path DAPE_PATH  \
+--ram_path RAM_PATH
+```
+If you run the script on an A100 GPU, you would get
+```
+Running 5 warm-up iterations...
+Starting inference for 500 iterations...
+Inference: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 500/500 [00:52<00:00,  9.55it/s]
+Average inference time per iteration: 0.1046 seconds.
+```
+
+## 📏 Benchmark Results
+For convenient comparison, we provide OSEDiff's test results on the RealSR benchmark and DrealSR benchmark in the `preset/datasets/benchmark_realsr/results_osediff` and `preset/datasets/benchmark_drealsr/results_osediff` directory. For the DIV2K validation benchmark, due to the large number of images, we have uploaded the test results to [Google Drive](https://drive.google.com/file/d/1WWYVholKl6f-Ef4g5starGFsB2X79Pqe/view?usp=sharing). These benchmarks were directly copied from [StableSR](https://huggingface.co/datasets/Iceclear/StableSR-TestSets?row=0). Additionally, we also provide a script for testing IQA (Image Quality Assessment).
+```
+python test_metrics.py \
+--inp_imgs preset/datasets/benchmark_realsr/results_osediff \
+--gt_imgs preset/datasets/benchmark_realsr/test_HR \
+--log preset/datasets/benchmark_realsr/results_osediff/metrics
+
+python test_metrics.py \
+--inp_imgs preset/datasets/benchmark_drealsr/results_osediff \
+--gt_imgs preset/datasets/benchmark_drealsr/test_HR \
+--log preset/datasets/benchmark_drealsr/results_osediff/metrics
+```
+If you run these two scripts, you would get them at last line, which are consistent with the data presented in Table 1 of our [paper](https://arxiv.org/pdf/2406.08177).
+```
+RealSR benchmark:
+===== Average Metrics for [results_osediff] =====
+PSNR: 25.1511; SSIM: 0.7341; LPIPS: 0.2921; DISTS: 0.2128; CLIPIQA: 0.6693; NIQE: 5.6476; MUSIQ: 69.0896; MANIQA: 0.6331 | FID: 123.493817 | FID Runtime: 6.79 sec
+
+DrealSR benchmark:
+===== Average Metrics for [results_osediff] =====
+PSNR: 27.9243; SSIM: 0.7835; LPIPS: 0.2968; DISTS: 0.2165; CLIPIQA: 0.6963; NIQE: 6.4902; MUSIQ: 64.6537; MANIQA: 0.5895 | FID: 135.296586 | FID Runtime: 8.10 sec
+```
+
+##  1. Train for Real-World Image Super-Resolution
+#### Step1: Prepare training data
+We use LSDIR (84991) and the first 10k images from FFHQ as our training data. Please write their absolute paths into a txt file. Each line in the txt file should be the absolute path of an image. Just like:
+
+Generate the txt file:
+```bash
+# Linux/Mac
+find /path/to/dataset/ -name "*.png" > lsdirtrain.txt
+
+# Windows (PowerShell)
+Get-ChildItem D:\data\LSDIR\ -Recurse -Filter *.png | ForEach-Object { $_.FullName } | Out-File -FilePath lsdirtrain.txt -Encoding utf8
+```
+
+```
+LSDIR/HR_merge/0000001.png
+LSDIR/HR_merge/0000002.png
+...
+```
+
+#### Step2: Training for OSEDiff
+Pleasr put your txt file path at `YOUR TXT FILE PATH`. If you have 4 GPUs, you can run
+
+```
+CUDA_VISIBLE_DEVICES="1" accelerate launch train_osediff.py \
+    --pretrained_model_name_or_path=preset/models/sd2-1 \
+    --ram_path=preset/models/ram_swin_large_14m.pth \
+    --learning_rate=5e-5 \
+    --train_batch_size=1 \
+    --gradient_accumulation_steps=1 \
+    --enable_xformers_memory_efficient_attention --checkpointing_steps 500 \
+    --mixed_precision='fp16' \
+    --report_to "tensorboard" \
+    --seed 123 \
+    --output_dir=experience/osediff \
+    --dataset_txt_paths_list 'lsdirtrain.txt' \
+    --dataset_prob_paths_list 1 \
+    --neg_prompt="painting, oil painting, illustration, drawing, art, sketch, cartoon, CG Style, 3D render, unreal engine, blurring, dirty, messy, worst quality, low quality, frames, watermark, signature, jpeg artifacts, deformed, lowres, over-smooth" \
+    --cfg_vsd=7.5 \
+    --lora_rank=4 \
+    --lambda_lpips=2 \
+    --lambda_l2=1 \
+    --lambda_vsd=1 \
+    --lambda_vsd_lora=1 \
+    --deg_file_path="params_realesrgan.yml" \
+    --tracker_project_name "train_osediff"
+```
+
+## Lightweight DCAE-based DiffLoss SR Training
+
+Train a lightweight residual-prediction SR model using DCAE + DiffLoss.
+DiffLoss learns `encoder(teacher_output) - encoder(lq)` directly in DCAE latent
+space, with pixel-level L2+LPIPS distillation against the teacher.
+No SD2.1 UNet dependency at inference — only a DCAE checkpoint is needed.
+
+```bash
+# Phase 1: Pretrain pruned decoder
+python train_pune_dcae.py \
+    --pretrained_dcae preset/models/mit-han-labdc-ae-f32c32-in-1.0.safetensors \
+    --pruned_preset dc-ae-f32c32-pruned \
+    --lambda_l1 1.0 --lambda_l2 1.0 --lambda_lpips 1.0 \
+    --output_dir experience/decoder_pretrain \
+    --dataset_txt_paths_list lsdirtrain.txt \
+    --train_batch_size 2 \
+    --pretrained_pune_dcae_path /experience/decoder_pretrain/checkpoints/decoder_best.pth
+
+# Phase 2: Distill mapper + DiffLoss with frozen pruned DCAE
+python train_distill.py \
+  --teacher_ckpt preset/models/osediff.pkl \
+  --teacher_sd_path preset/models/sd2-1 \
+  --dataset_txt_paths_list lsdirtrain.txt \
+  --ram_path preset/models/ram_swin_large_14m.pth \
+  --student_model dcae_f32c32_pruned \
+  --train_batch_size 1 \
+  --mixed_precision fp16 \
+  --output_dir experience/distill \
+  --max_train_steps 10000 \
+  --pretrained_pune_dcae experience/decoder_pretrain/checkpoints/decoder_best.pth
+```
+
+Available student presets (`--student_model`):
+
+| Name             | Compression | Latent ch | Notes                    |
+|------------------|-------------|-----------|--------------------------|
+| `dcae_f32c32`    | 32×         | 32        | default, balanced        |
+| `dcae_f64c128`   | 64×         | 128       | higher quality, slower   |
+
+Run `python train_distill.py --list_student_models` to print the full zoo.
+
+The checkpoint is saved under `--output_dir/checkpoints/step_*.pth` with
+DiffLoss weights and DCAE config embedded, so test scripts load it automatically.
+
+### Testing
+
+All three existing test scripts support the distilled model via `--use_distilled`.
+
+**Inference (single image / folder):**
+```bash
+python test_pune_dcae.py \
+    --full_dcae_model preset/models/mit-han-labdc-ae-f32c32-in-1.0.safetensors \
+    --pune_dcae_ckpt experience/decoder_pretrain/checkpoints/dcae_step_7001.pth \
+    --test_image_dir preset/datasets/test_dataset/input \
+    --output_dir preset/datasets/decoder_test_output
+```
+
+```bash
+python test_osediff.py \
+    -i preset/datasets/test_dataset/input \
+    -o preset/datasets/test_dataset/output_dcae \
+    --osediff_path experience/distill/checkpoints/step_1.pth \
+    --ram_path preset/models/ram_swin_large_14m.pth \
+    --ram_ft_path preset/models/DAPE.pth \
+    --use_distilled \
+    --mixed_precision fp16
+```
+
+```bash
+python test_osediff.py \
+    -i preset/datasets/test_dataset/input \
+    -o preset/datasets/test_dataset/output_dcae \
+    --osediff_path preset/models/osediff.pkl \
+    --pretrained_model_name_or_path preset/models/sd2-1 \
+    --ram_path preset/models/ram_swin_large_14m.pth \
+    --ram_ft_path preset/models/DAPE.pth \
+    --mixed_precision fp16
+```
+
+**Inference speed benchmark:**
+```bash
+python test_inference_time.py \
+    --use_distilled \
+    --osediff_path experience/distill/checkpoints/step_1.pth \
+    --inference_iterations 500 \
+    --warmup_iterations 5 \
+    --process_size 512
+```
+
+```bash
+python test_inference_time.py \
+    --pretrained_model_name_or_path preset/models/sd2-1 \
+    --osediff_path preset/models/osediff.pkl \
+    --ram_path preset/models/ram_swin_large_14m.pth \
+    --ram_ft_path preset/models/DAPE.pth \
+    --inference_iterations 500 \
+    --warmup_iterations 5 \
+    --process_size 512  
+```
+
+**IQA metrics:**
+```bash
+python test_metrics.py \
+    --inp_imgs preset/datasets/test_dataset/output_dcae \
+    --gt_imgs preset/datasets/benchmark_realsr/test_HR \
+    --log preset/datasets/benchmark_realsr/results_dcae/metrics
+```
+
+**Using the model programmatically:**
+```python
+from student import DCAESR_test
+
+class Args:
+    distilled_ckpt_path = "experience/distill/checkpoints/step_5000.pth"
+    mixed_precision = "fp16"
+
+model = DCAESR_test(Args())
+model.eval()
+sr = model(lq_tensor)  # single forward, no prompt needed
+```
+
+## 2. Train for Face Restoration
+#### Step1: Prepare training data
+We use FFHQ as our training data. Please follow the instructions aboved to prepare the txt file.
+
+#### Step2: Training for OSEDiff-face
+Pleasr put your txt file path at `YOUR TXT FILE PATH`. If you have 4 GPUs, you can run
+```
+CUDA_VISIBLE_DEVICES="0,1,2,3," accelerate launch train_osediff_face.py \
+    --pretrained_model_name_or_path=SD21BASE_PATH \
+    --ram_path=RAM_PATH \
+    --learning_rate=5e-5 \
+    --train_batch_size=4 \
+    --gradient_accumulation_steps=1 \
+    --enable_xformers_memory_efficient_attention --checkpointing_steps 500 \
+    --mixed_precision='fp16' \
+    --report_to "tensorboard" \
+    --seed 123 \
+    --output_dir=experience/osediff_face \
+    --dataset_txt_paths_list 'YOUR TXT FILE PATH','YOUR TXT FILE PATH' \
+    --dataset_prob_paths_list 1,1 \
+    --neg_prompt="blurring, dirty, messy, worst quality, low quality, frames, watermark, signature, jpeg artifacts, deformed, lowres, over-smooth" \
+    --cfg_vsd=7.5 \
+    --lora_rank=4 \
+    --lambda_lpips=2 \
+    --lambda_l2=1 \
+    --lambda_vsd=1 \
+    --lambda_vsd_lora=1 \
+    --deg_file_path="params_codeformer.yml" \
+    --tracker_project_name "train_osediff_face"
+```
+
+
+
+## 📷 Results
+[<img src="asserts/compare_01.png" height="400px"/>](https://imgsli.com/Mjc1ODI1) [<img src="asserts/compare_02.png" height="400px"/>](https://imgsli.com/Mjc1ODMx)
+
+![benchmark](asserts/benchmark1.jpg)
+
+* For convenient evaluation and comparison, we have published the test results of DIV2K_val, RealSR, and DRealSR on [Google Drive](https://drive.google.com/file/d/1WWYVholKl6f-Ef4g5starGFsB2X79Pqe/view?usp=sharing).
+
+<details>
+<summary>Quantitative Comparisons (click to expand)</summary>
+
+<p align="center">
+  <img width="900" src="asserts/tab_main.png">
+</p>
+
+<p align="center">
+  <img width="900" src="asserts/tab_main_gan.png">
+</p>
+</details>
+
+<details>
+<summary>Visual Comparisons (click to expand)</summary>
+
+<p align="center">
+  <img width="900" src="asserts/fig_main.png">
+</p>
+
+<p align="center">
+  <img width="900" src="asserts/fig_main_gan.png">
+</p>
+</details>
+
+## 🎫 License
+This project is released under the [Apache 2.0 license](LICENSE).
+
+## 📧 Contact
+If you have any questions, please feel free to contact: `rong-yuan.wu@connect.polyu.hk`
+
+
+## 🎓Citations
+<!-- If our code helps your research or work, please consider citing our paper.
+The following are BibTeX references: -->
+
+```
+@article{wu2024one,
+  title={One-Step Effective Diffusion Network for Real-World Image Super-Resolution},
+  author={Wu, Rongyuan and Sun, Lingchen and Ma, Zhiyuan and Zhang, Lei},
+  journal={arXiv preprint arXiv:2406.08177},
+  year={2024}
+}
+```
+
+<details>
+<summary>statistics</summary>
+
+![visitors](https://visitor-badge.laobi.icu/badge?page_id=cswry/OSEDiff)
+
+</details>
