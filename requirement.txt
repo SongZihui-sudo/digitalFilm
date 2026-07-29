@@ -1,8 +1,35 @@
-gradio
-torch
+# ============================================================
+# digitalFilm — backend inference & pipeline dependencies
+# ============================================================
+# Installation: pip install -r requirements.txt
+# Recommended Python: 3.10+
+
+# --- core ML framework ---
+torch>=2.0.1
 torchvision
-requests
+
+# --- diffusion / VAE / text encoder (OSEDiff + digitalFilm) ---
+diffusers==0.25.0
+transformers>=4.28.1
+peft>=0.9.0
+
+# --- utils used across the project ---
+einops>=0.7.0
+numpy
+Pillow
+PyYAML>=6.0
 tqdm
-matplotlib
-pillow
-scikit-learn
+
+# --- HTTP server ---
+fastapi
+uvicorn[standard]
+
+# --- external APIs (image download) ---
+requests
+
+# --- optional: depth estimation for optical simulator ---
+# huggingface_hub  (required when pulling Depth-Anything-V2 from HF Hub)
+huggingface_hub
+
+# --- optional: xformers (memory-efficient attention, CUDA only) ---
+# xformers>=0.0.20
