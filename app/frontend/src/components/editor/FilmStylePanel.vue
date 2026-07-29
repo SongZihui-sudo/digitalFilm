@@ -18,6 +18,10 @@
       <div class="optics-settings">
         <div class="optics-settings__section">
           <label class="optics-settings__toggle">
+            <input v-model="editor.film.sr!.enabled" type="checkbox">
+            <span> 画质增强 </span>
+          </label>
+          <label class="optics-settings__toggle">
             <input v-model="editor.film.dof!.enabled" type="checkbox">
             <span>景深模拟</span>
           </label>
@@ -188,6 +192,14 @@ async function getPresets() {
     if (!editor.film.preset && presetOptions.value.length > 0) {
       editor.film.preset = presetOptions.value[0].value
     }
+
+    // Sync initial film_name when presets are loaded
+    if (editor.film.frame_border) {
+      const matched = presetOptions.value.find(p => p.value === editor.film.preset)
+      if (matched) {
+        editor.film.frame_border.film_name = matched.label
+      }
+    }
   } catch (error) {
     console.error('load presets failed:', error)
   } finally {
@@ -197,6 +209,13 @@ async function getPresets() {
 
 function selectPreset(value: string) {
   editor.film.preset = value
+
+  // Sync film_name in frame_border so the watermark label tracks the selected preset
+  const matched = presetOptions.value.find(p => p.value === value)
+  if (matched && editor.film.frame_border) {
+    editor.film.frame_border.film_name = matched.label
+  }
+
   showLibrary.value = false
 }
 

@@ -8,11 +8,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoTokenizer, CLIPTextModel
 from diffusers import DDPMScheduler
-from models.autoencoder_kl import AutoencoderKL
-from models.unet_2d_condition import UNet2DConditionModel
+from .models.autoencoder_kl import AutoencoderKL
+from .models.unet_2d_condition import UNet2DConditionModel
 from peft import LoraConfig
 
-from my_utils.vaehook import VAEHook, perfcount
+from .my_utils.vaehook import VAEHook, perfcount
 
 def initialize_vae(args):
     vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
@@ -277,6 +277,50 @@ class OSEDiff_test(torch.nn.Module):
         self.timesteps = torch.tensor([999], device="cuda").long() 
         self.noise_scheduler.alphas_cumprod = self.noise_scheduler.alphas_cumprod.cuda()
 
+class OSEDiff_test_for_digitalFilm(torch.nn.Module):
+    def __init__(self, pretrained_model_name_or_path: str, osediff_path: str, vae_encoder_tiled_size: int = 1024, vae_decoder_tiled_size: int = 224,
+                 mixed_precision: str = "fp16", device: str = "cpu", merge_and_unload_lora: bool = True,
+                 latent_tiled_size: int = 960, latent_tiled_overlap: int = 32):
+        super().__init__()
+
+        self.device = device
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path, subfolder="tokenizer")
+        self.text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder")
+        self.noise_scheduler = DDPMScheduler.from_pretrained(pretrained_model_name_or_path, subfolder="scheduler")
+        self.noise_scheduler.set_timesteps(1, device=device)
+        self.vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae")
+        self.unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet")
+
+        self.weight_dtype = torch.float32
+        if mixed_precision == "fp16":
+            self.weight_dtype = torch.float16
+
+        osediff = torch.load(osediff_path)
+        self.load_ckpt(osediff)
+
+        # merge lora
+        if merge_and_unload_lora:
+            print(f'===> MERGE LORA <===')
+            self.vae = self.vae.merge_and_unload()
+            self.unet = self.unet.merge_and_unload()
+
+        # vae tile — must come AFTER merge_and_unload so hooks aren't lost
+        self.latent_tiled_size = latent_tiled_size
+        self.latent_tiled_overlap = latent_tiled_overlap
+        # Always keep vae_to_gpu=False: the VAE is already placed on the
+        # correct device by self.vae.to(device, ...).  Letting VAEHook
+        # move only the encoder sub-graph to cuda leaves quant_conv on
+        # cpu, which breaks autoencoder_kl.encode().
+        self._init_tiled_vae(encoder_tile_size=vae_encoder_tiled_size, decoder_tile_size=vae_decoder_tiled_size,
+                             vae_to_gpu=False)
+
+        self.unet.to(device, dtype=self.weight_dtype)
+        self.vae.to(device, dtype=self.weight_dtype)
+        self.text_encoder.to(device, dtype=self.weight_dtype)
+        self.timesteps = torch.tensor([999], device=device).long()
+        if device == "cuda":
+            self.noise_scheduler.alphas_cumprod = self.noise_scheduler.alphas_cumprod.cuda()
+
         
 
     def load_ckpt(self, model):
@@ -320,10 +364,11 @@ class OSEDiff_test(torch.nn.Module):
     def forward(self, lq, prompt):
 
         prompt_embeds = self.encode_prompt([prompt])
-        lq_latent = self.vae.encode(lq.to(self.weight_dtype)).latent_dist.sample() * self.vae.config.scaling_factor
+        prompt_embeds = prompt_embeds.to(device=self.unet.device, dtype=self.weight_dtype)
+        lq_latent = self.vae.encode(lq).latent_dist.sample() * self.vae.config.scaling_factor
         ## add tile function
         _, _, h, w = lq_latent.size()
-        tile_size, tile_overlap = (self.args.latent_tiled_size, self.args.latent_tiled_overlap)
+        tile_size, tile_overlap = (self.latent_tiled_size, self.latent_tiled_overlap)
         if h * w <= tile_size * tile_size:
             print(f"[Tiled Latent]: the input size is tiny and unnecessary to tile.")
             model_pred = self.unet(lq_latent, self.timesteps, encoder_hidden_states=prompt_embeds).sample
@@ -372,7 +417,7 @@ class OSEDiff_test(torch.nn.Module):
                     if len(input_list) == 1 or col == grid_cols-1:
                         input_list_t = torch.cat(input_list, dim=0)
                         # predict the noise residual
-                        model_out = self.unet(input_list_t, self.timesteps, encoder_hidden_states=prompt_embeds.to(self.weight_dtype),).sample
+                        model_out = self.unet(input_list_t, self.timesteps, encoder_hidden_states=prompt_embeds,).sample
                         input_list = []
                     noise_preds.append(model_out)
 

@@ -69,7 +69,7 @@ from einops import rearrange
 import os
 import sys
 sys.path.append(os.getcwd())
-import my_utils.devices as devices
+from ..my_utils import devices
 
 try:
     import xformers
@@ -496,7 +496,7 @@ class GroupNormParam:
         mean = torch.vstack(self.mean_list)
         max_value = max(self.pixel_list)
         pixels = torch.tensor(
-            self.pixel_list, dtype=torch.float32, device=devices.device) / max_value
+            self.pixel_list, dtype=torch.float32, device=var.device) / max_value
         sum_pixels = torch.sum(pixels)
         pixels = pixels.unsqueeze(
             1) / sum_pixels

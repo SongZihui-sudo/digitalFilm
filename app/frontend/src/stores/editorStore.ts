@@ -38,6 +38,9 @@ export const useEditorStore = defineStore('editor', {
         film_name: 'Kodak Gold 200',
         image_index: 1,
       },
+      sr: {
+        enabled: false
+      }
     },
     previewUrl: '',
     resultUrl: '',

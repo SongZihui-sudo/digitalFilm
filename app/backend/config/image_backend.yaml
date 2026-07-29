@@ -13,3 +13,11 @@ optics:
   device: "cpu"
   depth_model_name: "depth-anything/Depth-Anything-V2-Base-hf"
   depth_model_cache_dir: "checkpoints/depth_anything"
+
+osediff:
+  device: "cuda"
+  pretrained_model_name_or_path: "D:/projects/digitalFilm/models/OSEDiff/preset/models/sd2-1"
+  osediff_path: "D:/projects/digitalFilm/models/OSEDiff/preset/models/osediff.pkl"
+  vae_encoder_tiled_size: 1024
+  vae_decoder_tiled_size: 244
+  merge_and_unload_lora: False

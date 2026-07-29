@@ -14,6 +14,7 @@ import os
 import sys
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request, Header
+import traceback
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "../.."))
@@ -26,6 +27,7 @@ from models.optical_simulator import (
     DofSettings as OpticalDofSettings,
     OpticalSimulator,
 )
+from models.odediff_port import OSEDIFF_port
 from utils.utils import (
     ensure_dir,
     resize_to_multiple_of_16,
@@ -67,10 +69,14 @@ class DofSettings(BaseModel):
             focus_point_y=self.focus_point_y,
         )
 
+class srSettings(BaseModel):
+    enabled: bool = False
+
 
 class FilmStyleSettings(BaseModel):
     preset: str = "kodak_gold_200"
     dof: DofSettings = DofSettings()
+    sr: srSettings = srSettings()
 
 
 class FilmGenerateRequest(BaseModel):
@@ -132,6 +138,7 @@ class DigitalFilmHTTPService:
         ensure_dir(self.output_dir)
 
         self.models = self.load_models()
+
         # 光学模拟（Depth Anything / DefocusLens）默认在 CPU，
         # 为 GPU 留出显存给胶片网络推理。
         optics_config = getattr(self.app_config.opt, "optics", None)
@@ -150,6 +157,18 @@ class DigitalFilmHTTPService:
             device=optical_device,
             depth_model_name=depth_model_name,
             depth_model_cache_dir=depth_model_cache_dir,
+        )
+
+        osediff_config = getattr(self.app_config.opt, "osediff", None)
+        osediff_device = getattr(osediff_config, "device", "cpu")
+        self.osediff = OSEDIFF_port(
+            getattr(osediff_config, "pretrained_model_name_or_path", "./checkpoint/sd2-1"),
+            getattr(osediff_config, "osediff_path", "./checkpoint/osediff.pth"),
+            getattr(osediff_config, "vae_encoder_tiled_size", 1024),
+            getattr(osediff_config, "vae_decoder_tiled_size", 244),
+            "fp16",
+            osediff_device,
+            getattr(osediff_config, "merge_and_unload_lora", True)
         )
 
         self.master_server_url = getattr(
@@ -385,9 +404,14 @@ class DigitalFilmHTTPService:
         # 3. basic 调整
         image = self.apply_basic_adjustments(image, basic)
 
-        # 4. 光学模拟先在 CPU 执行，避免与胶片模型争用 GPU 显存。
+        # 转成张量
         image = resize_to_multiple_of_16(image.convert("RGB"), max_size=max_size)
         x = pil_to_tensor(image)
+
+        # 画质增强
+        x = self.osediff.process(x, film.sr.enabled)
+
+        # 4. 光学模拟先在 CPU 执行，避免与胶片模型争用 GPU 显存。
         x = self.optical_simulator.apply(
             x,
             dof_settings=film.dof.to_optical_settings(),
@@ -395,7 +419,9 @@ class DigitalFilmHTTPService:
 
         # 5. 将光学处理结果传给胶片模型所在设备。
         x = x.to(self.device)
-        output = tensor_to_pil(self.infer_tensor(x, preset=film.preset))
+        x = self.infer_tensor(x, preset=film.preset)
+
+        output = tensor_to_pil(x)
 
         # 6. 颗粒与高光晕染已由 digitalFilm_g.FilmPipeline 的已训练模块完成。
         # 不在这里重复叠加基于 PIL/Numpy 的效果，避免与模型效果重复。
@@ -467,8 +493,8 @@ def film_generate(
             auth_token=authorization,  # 传递 Token
         )
     except Exception as e:
-        # 建议记录日志方便排查
         print(f"Generation error: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
 
