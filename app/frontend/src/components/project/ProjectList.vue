@@ -74,6 +74,9 @@ async function selectProject(projectId: string) {
 
 <style scoped>
 .project-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 
@@ -82,6 +85,7 @@ async function selectProject(projectId: string) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .project-list__title {
@@ -101,6 +105,9 @@ async function selectProject(projectId: string) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .project-item {

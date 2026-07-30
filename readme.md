@@ -49,7 +49,7 @@ python demo.py
 Verify MCP protocol connectivity:
 
 ```
-npx @modelcontextprotocol/inspector --transport stdio -- python app/mcp_server.py
+npx @modelcontextprotocol/inspector --transport stdio -- python app/backend/mcp_server.py
 ```
 
 ### 3. Launch Full Web Application
@@ -61,7 +61,7 @@ It is recommended to start the full-stack services in the following order:
 Handles model inference, image editing and style generation:
 
 ```
-python app/image_server.py
+python app/backend/image_server.py
 ```
 
 #### Step 2: Start Master Backend
@@ -69,7 +69,7 @@ python app/image_server.py
 Manages projects, image metadata, editing parameters, user permissions and frontend data exchange:
 
 ```
-cd app/master_backend
+cd app/backend/master_backend
 go run .
 # Or compile and run
 go build -o master_backend
@@ -81,7 +81,7 @@ go build -o master_backend
 Hosts uploaded original images and rendered results, and provides HTTP access endpoints:
 
 ```
-cd app/static_backend
+cd app/backend/static_backend
 go run .
 # Or compile and run
 go build -o static_backend
@@ -106,24 +106,6 @@ Once all services are up, access the DigitalFilm editing workstation in your bro
 > ```
 > UPDATE users SET is_admin = 1 WHERE username = 'your_username';
 > ```
-
----
-
-## 📂 Project Structure
-
-```
-DigitalFilm/
-├── app/                    # Full-stack web application code
-│   ├── frontend/           # Frontend UI (Vue + Vite + TypeScript)
-│   ├── master_backend/     # Master backend: projects, images, parameters, user management
-│   ├── static_backend/     # Static asset backend: hosts originals and outputs
-│   ├── image_server.py     # Python image processing & model inference service
-│   └── mcp_server.py       # MCP protocol service
-├── options/                # Model training configuration files
-├── example/                # Sample images and demo assets
-├── pipeline.py             # Model training entry point
-└── ...
-```
 
 ---
 

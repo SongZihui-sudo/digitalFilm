@@ -1,6 +1,6 @@
 global_config:
   cuda: true
-  server_root: "./server_data"
+  server_root: "./mcp_result"
   static_server_port: 6060
   static_server_host: "127.0.0.1"
   # 光学模拟可能耗时较长；内部向主服务登记生成结果的等待上限（秒）。
@@ -18,6 +18,6 @@ osediff:
   device: "cuda"
   pretrained_model_name_or_path: "D:/projects/digitalFilm/models/OSEDiff/preset/models/sd2-1"
   osediff_path: "D:/projects/digitalFilm/models/OSEDiff/preset/models/osediff.pkl"
-  vae_encoder_tiled_size: 1024
-  vae_decoder_tiled_size: 244
+  vae_encoder_tiled_size: 512
+  vae_decoder_tiled_size: 128
   merge_and_unload_lora: False
