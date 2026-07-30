@@ -48,6 +48,7 @@ checkpoints/
 runs/
 new_models/
 server_data/
+mcp_result/
 app/models/
 app/backend/checkpoints/
 app/backend/server_data/
