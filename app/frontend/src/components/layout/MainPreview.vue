@@ -26,7 +26,7 @@
         </button>
 
         <button class="secondary-btn" @click="fitToScreen = !fitToScreen">
-          {{ fitToScreen ? '原始大小' : '适应屏幕' }}
+          {{ fitToScreen ? '适应屏幕' : '原始大小' }}
         </button>
 
         <button class="secondary-btn" @click="showCompare = !showCompare">
@@ -127,7 +127,7 @@ import LoginModal from '@/components/common/LoginModal.vue'
 const projectStore = useProjectStore()
 const editorStore = useEditorStore()
 
-const fitToScreen = ref(true)
+const fitToScreen = ref(false)
 const showCompare = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
@@ -390,17 +390,18 @@ watch(
   display: inline-block;
 }
 
+/* 默认状态和原始大小模式：图片按原始尺寸显示 */
 .preview-image,
 .preview-media {
   display: block;
-  max-width: none;
-  max-height: none;
   border-radius: 14px;
   box-shadow: var(--shadow-lg);
   transition:
     filter 120ms ease,
     transform 120ms ease,
     box-shadow 120ms ease;
+  width: auto;
+  height: auto;
 }
 
 /* 对焦点标记 */
@@ -421,7 +422,15 @@ watch(
   stroke: #ffd700;
 }
 
-/* 适应屏幕模式 */
+/* 适应屏幕模式：缩放图片使其完整可见 */
+.preview-canvas.is-fit .preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
 .preview-canvas.is-fit .preview-image,
 .preview-canvas.is-fit .preview-media {
   max-width: 100%;
@@ -431,7 +440,7 @@ watch(
   object-fit: contain;
 }
 
-/* 原始大小模式 */
+/* 原始大小模式：图片按原始尺寸显示，超出可滚动 */
 .preview-canvas:not(.is-fit) .preview-image,
 .preview-canvas:not(.is-fit) .preview-media {
   width: auto;

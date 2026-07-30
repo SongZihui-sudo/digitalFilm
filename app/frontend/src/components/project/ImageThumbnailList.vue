@@ -19,3 +19,22 @@ import ImageThumbnailItem from './ImageThumbnailItem.vue';
 
 const store = useProjectStore();
 </script>
+
+<style scoped>
+.image-list {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.image-list h3 {
+  flex-shrink: 0;
+}
+
+.image-list__items {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+</style>

@@ -16,7 +16,7 @@
       />
     </div>
 
-    <div class="left-sidebar__section left-sidebar__section--card">
+    <div class="left-sidebar__section left-sidebar__section--card left-sidebar__section--shrink">
       <ProjectList />
     </div>
 
@@ -179,11 +179,19 @@ onUnmounted(() => {
 .left-sidebar__section {
   margin-bottom: 12px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .left-sidebar__section--grow {
   flex: 1;
   overflow: hidden;
+}
+
+.left-sidebar__section--shrink {
+  flex: 0 0 auto;
+  overflow: hidden;
+  max-height: 40%;
+  min-height: 0;
 }
 
 .left-sidebar__section--card {
